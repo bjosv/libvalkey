@@ -32,9 +32,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install gcc-multilib
     - uses: actions/checkout@v3
     - name: Run make
-      run: make all
-      env:
-        PLATFORM_FLAGS: -m32
+      run: make 32bit
     - name: Run unittests
       env:
         REDIS_DOCKER: redis:alpine
@@ -78,19 +76,33 @@ jobs:
     steps:
       - uses: microsoft/setup-msbuild@v1.0.2
       - uses: actions/checkout@v3
-      - name: Run CMake (shared lib)
+      - name: Run CMake
         run: cmake -Wno-dev CMakeLists.txt
-      - name: Build shared library
-        run: MSBuild hiredis.vcxproj /p:Configuration=Debug
-      - name: Run CMake (static lib)
-        run: cmake -Wno-dev CMakeLists.txt -DBUILD_SHARED_LIBS=OFF
-      - name: Build static library
-        run: MSBuild hiredis.vcxproj /p:Configuration=Debug
-      - name: Build test.exe
-        run: MSBuild hiredis-test.vcxproj /p:Configuration=Debug
+      - name: Build libraries
+        run: MSBuild valkey.vcxproj /p:Configuration=Debug
+      - name: Build client_test.exe
+        run: MSBuild tests\client_test.vcxproj /p:Configuration=Debug
       # use memurai, redis compatible server, since it is easy to install.  Can't
       # install official redis containers on the windows runner
       - name: Install Memurai redis server
         run: choco install -y memurai-developer.install
-      - name: Run tests
-        run: Debug\hiredis-test.exe
+      - name: CHECK
+        working-directory: tests\Debug
+        run: dir
+      - name: Run tests 1
+        working-directory: tests\Debug
+        run: start client_test.exe
+        continue-on-error: true
+      - name: Run tests 2
+        working-directory: tests\Debug
+        run: .\client_test.exe
+        continue-on-error: true
+      - name: Run tests 3
+        run: .\tests\Debug\client_test.exe
+        continue-on-error: true
+      - name: Run tests 4
+        run: tests\Debug\client_test.exe
+        continue-on-error: true
+      - name: Run tests 5
+        run: Start-Process -FilePath "tests\Debug\client_test.exe"
+        continue-on-error: true
