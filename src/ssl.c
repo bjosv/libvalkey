@@ -389,12 +389,14 @@ static int valkeySSLConnect(valkeyContext *c, SSL *ssl) {
 
     if (c->err == 0) {
         char err[512];
+        int last_errno = errno;
         if (rv == SSL_ERROR_SYSCALL)
-            snprintf(err,sizeof(err)-1,"SSL_connect failed: %s",strerror(errno));
+            snprintf(err,sizeof(err)-1,"SSL_connect failed: rv=SSL_ERROR_SYSCALL(%d) %s(%d) (%d)",rv, strerror(errno),errno,last_errno);
         else {
             unsigned long e = ERR_peek_last_error();
-            snprintf(err,sizeof(err)-1,"SSL_connect failed: %s",
+            snprintf(err,sizeof(err)-1,"SSL_connect failed: rv=%d e=%ld %s",rv, e,
                     ERR_reason_error_string(e));
+            ERR_print_errors_fp(stdout);
         }
         valkeySetError(c, VALKEY_ERR_IO, err);
     }

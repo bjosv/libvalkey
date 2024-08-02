@@ -757,6 +757,8 @@ valkeyFD valkeyFreeKeepFd(valkeyContext *c) {
 int valkeyReconnect(valkeyContext *c) {
     valkeyOptions options = { .connect_timeout = c->connect_timeout };
 
+    printf("******************** reconnect\n");
+
     c->err = 0;
     memset(c->errstr, '\0', strlen(c->errstr));
 
@@ -798,9 +800,12 @@ int valkeyReconnect(valkeyContext *c) {
         return VALKEY_ERR;
     }
 
+    printf("******************** reconnect calls connect()\n");
     if (c->funcs->connect(c, &options) != VALKEY_OK) {
+        printf("******************** reconnect failed in connect()\n");
         return VALKEY_ERR;
     }
+    printf("******************** reconnect called connect() - OK\n");
 
     if (c->command_timeout != NULL && (c->flags & VALKEY_BLOCK) && c->fd != VALKEY_INVALID_FD) {
         c->funcs->set_timeout(c, *c->command_timeout);
@@ -979,14 +984,18 @@ int valkeyBufferRead(valkeyContext *c) {
     int nread;
 
     /* Return early when the context has seen an error. */
-    if (c->err)
+    if (c->err) {
+        printf("####### FAIL valkeyBufferRead: context error\n");
         return VALKEY_ERR;
+    }
 
     nread = c->funcs->read(c, buf, sizeof(buf));
     if (nread < 0) {
+        printf("####### FAIL valkeyBufferRead: read < 0\n");
         return VALKEY_ERR;
     }
     if (nread > 0 && valkeyReaderFeed(c->reader, buf, nread) != VALKEY_OK) {
+        printf("####### FAIL valkeyBufferRead: valkeyReaderFeed failure\n");
         valkeySetError(c, c->reader->err, c->reader->errstr);
         return VALKEY_ERR;
     }
@@ -1069,24 +1078,32 @@ int valkeyGetReply(valkeyContext *c, void **reply) {
     void *aux = NULL;
 
     /* Try to read pending replies */
-    if (valkeyNextInBandReplyFromReader(c,&aux) == VALKEY_ERR)
+    if (valkeyNextInBandReplyFromReader(c,&aux) == VALKEY_ERR) {
+        printf("####### FAIL when reading pending replies\n");
         return VALKEY_ERR;
+    }
 
     /* For the blocking context, flush output buffer and read reply */
     if (aux == NULL && c->flags & VALKEY_BLOCK) {
         /* Write until done */
         do {
-            if (valkeyBufferWrite(c,&wdone) == VALKEY_ERR)
+            if (valkeyBufferWrite(c,&wdone) == VALKEY_ERR) {
+                printf("####### FAIL when writing to buffer\n");
                 return VALKEY_ERR;
+            }
         } while (!wdone);
 
         /* Read until there is a reply */
         do {
-            if (valkeyBufferRead(c) == VALKEY_ERR)
+            if (valkeyBufferRead(c) == VALKEY_ERR) {
+                printf("####### FAIL when reading from buffer\n");
                 return VALKEY_ERR;
+            }
 
-            if (valkeyNextInBandReplyFromReader(c,&aux) == VALKEY_ERR)
+            if (valkeyNextInBandReplyFromReader(c,&aux) == VALKEY_ERR) {
+                printf("####### FAIL when reading pending commands after send\n");
                 return VALKEY_ERR;
+            }
         } while (aux == NULL);
     }
 
@@ -1203,8 +1220,10 @@ static void *valkeyBlockForReply(valkeyContext *c) {
 }
 
 void *valkeyvCommand(valkeyContext *c, const char *format, va_list ap) {
-    if (valkeyvAppendCommand(c,format,ap) != VALKEY_OK)
+    if (valkeyvAppendCommand(c,format,ap) != VALKEY_OK) {
+        printf("####### FAIL when appending cmd\n");
         return NULL;
+    }
     return valkeyBlockForReply(c);
 }
 

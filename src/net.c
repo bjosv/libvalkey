@@ -60,7 +60,11 @@ void valkeyNetClose(valkeyContext *c) {
 static ssize_t valkeyNetRead(valkeyContext *c, char *buf, size_t bufcap) {
     ssize_t nread = recv(c->fd, buf, bufcap, 0);
     if (nread == -1) {
+        int myerrno = errno;
+        printf("*** net.c: valkeyNetRead failed: errno=%d [%s] block=%d\n", errno, strerror(errno), c->flags & VALKEY_BLOCK);
+        errno=myerrno;
         if ((errno == EWOULDBLOCK && !(c->flags & VALKEY_BLOCK)) || (errno == EINTR)) {
+            printf("*** net.c: valkeyNetRead failed: tryagain\n");
             /* Try again later */
             return 0;
         } else if(errno == ETIMEDOUT && (c->flags & VALKEY_BLOCK)) {
@@ -68,6 +72,11 @@ static ssize_t valkeyNetRead(valkeyContext *c, char *buf, size_t bufcap) {
             valkeySetError(c, VALKEY_ERR_TIMEOUT, "recv timeout");
             return -1;
         } else {
+            if (errno == 35) {
+                /* Try again later */
+                return 0;
+            }
+            printf("*** net.c: valkeyNetRead failed: OTHER ERROR: errno=%s\n", strerror(errno));
             valkeySetError(c, VALKEY_ERR_IO, strerror(errno));
             return -1;
         }
@@ -412,6 +421,7 @@ int valkeyContextConnectTcp(valkeyContext *c, const valkeyOptions *options) {
     }
 
     if (valkeyConnectTimeoutMsec(c, &timeout_msec) != VALKEY_OK) {
+        printf("*** net.c: timeout error\n");
         goto error;
     }
 
@@ -446,6 +456,7 @@ int valkeyContextConnectTcp(valkeyContext *c, const valkeyOptions *options) {
     }
     if (rv != 0) {
         valkeySetError(c, VALKEY_ERR_OTHER, gai_strerror(rv));
+        printf("*** net.c: getaddinfo error\n");
         return VALKEY_ERR;
     }
     for (p = servinfo; p != NULL; p = p->ai_next) {
@@ -454,8 +465,10 @@ addrretry:
             continue;
 
         c->fd = s;
-        if (valkeySetBlocking(c,0) != VALKEY_OK)
+        if (valkeySetBlocking(c,0) != VALKEY_OK){
+            printf("*** net.c: set blocking error\n");
             goto error;
+        }
         if (c->tcp.source_addr) {
             int bound = 0;
             /* Using getaddrinfo saves us from self-determining IPv4 vs IPv6 */
@@ -471,6 +484,7 @@ addrretry:
                 if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char*) &n,
                                sizeof(n)) < 0) {
                     freeaddrinfo(bservinfo);
+                    printf("*** net.c: set REUSE error\n");
                     goto error;
                 }
             }
@@ -513,6 +527,7 @@ addrretry:
                  */
             } else if (errno == EADDRNOTAVAIL && reuseaddr) {
                 if (++reuses >= VALKEY_CONNECT_RETRIES) {
+                    printf("*** net.c: retries error\n");
                     goto error;
                 } else {
                     valkeyNetClose(c);
@@ -520,14 +535,20 @@ addrretry:
                 }
             } else {
                 wait_for_ready:
-                if (valkeyContextWaitReady(c,timeout_msec) != VALKEY_OK)
+                if (valkeyContextWaitReady(c,timeout_msec) != VALKEY_OK) {
+                    printf("*** net.c: wait ready error\n");
                     goto error;
-                if (valkeySetTcpNoDelay(c) != VALKEY_OK)
+                }
+                if (valkeySetTcpNoDelay(c) != VALKEY_OK) {
+                    printf("*** net.c: no delay set error\n");
                     goto error;
+                }
             }
         }
-        if (blocking && valkeySetBlocking(c,1) != VALKEY_OK)
+        if (blocking && valkeySetBlocking(c,1) != VALKEY_OK) {
+                    printf("*** net.c: set blocking if blocking error\n");
             goto error;
+        }
 
         c->flags |= VALKEY_CONNECTED;
         rv = VALKEY_OK;
@@ -560,10 +581,14 @@ static int valkeyContextConnectUnix(valkeyContext *c, const valkeyOptions *optio
     struct sockaddr_un *sa;
     long timeout_msec = -1;
 
-    if (valkeyCreateSocket(c,AF_UNIX) < 0)
+    if (valkeyCreateSocket(c,AF_UNIX) < 0) {
+        printf("*** net.c: UNIX create socket error\n");
         return VALKEY_ERR;
-    if (valkeySetBlocking(c,0) != VALKEY_OK)
+    }
+    if (valkeySetBlocking(c,0) != VALKEY_OK) {
+        printf("*** net.c: UNIX set blocking=0 error\n");
         return VALKEY_ERR;
+    }
 
     c->connection_type = VALKEY_CONN_UNIX;
     if (c->unix_sock.path != path) {
@@ -582,8 +607,10 @@ static int valkeyContextConnectUnix(valkeyContext *c, const valkeyOptions *optio
         c->connect_timeout = NULL;
     }
 
-    if (valkeyConnectTimeoutMsec(c,&timeout_msec) != VALKEY_OK)
+    if (valkeyConnectTimeoutMsec(c,&timeout_msec) != VALKEY_OK) {
+        printf("*** net.c: UNIX set timeout error\n");
         return VALKEY_ERR;
+    }
 
     /* Don't leak sockaddr if we're reconnecting */
     if (c->saddr) vk_free(c->saddr);
@@ -599,14 +626,18 @@ static int valkeyContextConnectUnix(valkeyContext *c, const valkeyOptions *optio
         if (errno == EINPROGRESS && !blocking) {
             /* This is ok. */
         } else {
-            if (valkeyContextWaitReady(c,timeout_msec) != VALKEY_OK)
+            if (valkeyContextWaitReady(c,timeout_msec) != VALKEY_OK) {
+                printf("*** net.c: UNIX wait ready error\n");
                 return VALKEY_ERR;
+            }
         }
     }
 
     /* Reset socket to be blocking after connect(2). */
-    if (blocking && valkeySetBlocking(c,1) != VALKEY_OK)
+    if (blocking && valkeySetBlocking(c,1) != VALKEY_OK) {
+        printf("*** net.c: UNIX set blocking=1 error\n");
         return VALKEY_ERR;
+    }
 
     c->flags |= VALKEY_CONNECTED;
     return VALKEY_OK;

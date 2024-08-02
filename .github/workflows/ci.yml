@@ -15,6 +15,15 @@ jobs:
         run: brew install valkey
       - name: Build using Makefile
         run: USE_SSL=1 make
+
+      - name: DEBUG
+        continue-on-error: true
+        run: |
+          ulimit -a
+          sudo launchctl limit maxfiles 256 unlimited
+          sudo launchctl limit maxfiles 128000 524288
+          ulimit -a
+
       - name: Run tests 1
         working-directory: tests
         env:

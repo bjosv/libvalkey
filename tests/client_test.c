@@ -279,9 +279,11 @@ static valkeyContext *do_connect(struct config config) {
 
 static void do_reconnect(valkeyContext *c, struct config config) {
     valkeyReconnect(c);
+    printf(">> Context status after reconnect: err=%d '%s'\n",c->err,c->errstr);
 
     if (config.type == CONN_SSL) {
         do_ssl_handshake(c);
+        printf(">> Context status after handshake: err=%d '%s'\n",c->err,c->errstr);
     }
 }
 
@@ -1365,8 +1367,14 @@ static void test_blocking_connection_timeouts(struct config config) {
     }
 
     test("Reconnect properly reconnects after a timeout: ");
+    printf("\n>> Context status before reconnect: err=%d '%s'\n",c->err,c->errstr);
     do_reconnect(c, config);
+
     reply = valkeyCommand(c, "PING");
+    if (reply == NULL || reply->type != VALKEY_REPLY_STATUS || strcmp(reply->str, "PONG") != 0) {
+        printf(">> CMD FAILURE: err=%d %s [reply=%p]\n",c->err,c->errstr, (void*)reply);
+        if (reply) printf(">> reply->type=%d reply->str=%s\n",reply->type, reply->str);
+    }
     test_cond(reply != NULL && reply->type == VALKEY_REPLY_STATUS && strcmp(reply->str, "PONG") == 0);
     freeReplyObject(reply);
 
