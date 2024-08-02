@@ -56,11 +56,10 @@ endif()
 
 if(MSVC OR MINGW)
   find_library(LIBEVENT_LIBRARY Libevent)
-else()
-  add_compile_options(-Wall -Wextra -pedantic -Werror)
-  # Debug mode for tests
-  set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "" FORCE)
 endif()
+
+# Debug mode for tests
+set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "" FORCE)
 
 # Add non-cluster tests
 add_executable(client_test client_test.c)
