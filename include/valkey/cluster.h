@@ -159,10 +159,9 @@ typedef struct valkeyClusterNodeIterator {
  * Synchronous API
  */
 
-valkeyClusterContext *valkeyClusterConnect(const char *addrs, int flags);
+valkeyClusterContext *valkeyClusterConnect(const char *addrs);
 valkeyClusterContext *valkeyClusterConnectWithTimeout(const char *addrs,
-                                                      const struct timeval tv,
-                                                      int flags);
+                                                      const struct timeval tv);
 int valkeyClusterConnect2(valkeyClusterContext *cc);
 
 valkeyClusterContext *valkeyClusterContextInit(void);
@@ -279,8 +278,7 @@ int valkeyClusterAsyncSetDisconnectCallback(valkeyClusterAsyncContext *acc,
                                             valkeyDisconnectCallback *fn);
 
 /* Connect and update slotmap, will block until complete. */
-valkeyClusterAsyncContext *valkeyClusterAsyncConnect(const char *addrs,
-                                                     int flags);
+valkeyClusterAsyncContext *valkeyClusterAsyncConnect(const char *addrs);
 /* Connect and update slotmap asynchronously using configured event engine. */
 int valkeyClusterAsyncConnect2(valkeyClusterAsyncContext *acc);
 void valkeyClusterAsyncDisconnect(valkeyClusterAsyncContext *acc);

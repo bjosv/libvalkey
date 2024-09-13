@@ -1393,7 +1393,7 @@ valkeyClusterConnectInternal(valkeyClusterContext *cc, const char *addrs) {
     return cc;
 }
 
-valkeyClusterContext *valkeyClusterConnect(const char *addrs, int flags) {
+valkeyClusterContext *valkeyClusterConnect(const char *addrs) {
     valkeyClusterContext *cc;
 
     cc = valkeyClusterContextInit();
@@ -1401,15 +1401,12 @@ valkeyClusterContext *valkeyClusterConnect(const char *addrs, int flags) {
     if (cc == NULL) {
         return NULL;
     }
-
-    cc->flags = flags;
 
     return valkeyClusterConnectInternal(cc, addrs);
 }
 
 valkeyClusterContext *valkeyClusterConnectWithTimeout(const char *addrs,
-                                                      const struct timeval tv,
-                                                      int flags) {
+                                                      const struct timeval tv) {
     valkeyClusterContext *cc;
 
     cc = valkeyClusterContextInit();
@@ -1417,8 +1414,6 @@ valkeyClusterContext *valkeyClusterConnectWithTimeout(const char *addrs,
     if (cc == NULL) {
         return NULL;
     }
-
-    cc->flags = flags;
 
     if (cc->connect_timeout == NULL) {
         cc->connect_timeout = vk_malloc(sizeof(struct timeval));
@@ -2954,13 +2949,12 @@ valkeyClusterAsyncContext *valkeyClusterAsyncContextInit(void) {
     return acc;
 }
 
-valkeyClusterAsyncContext *valkeyClusterAsyncConnect(const char *addrs,
-                                                     int flags) {
+valkeyClusterAsyncContext *valkeyClusterAsyncConnect(const char *addrs) {
 
     valkeyClusterContext *cc;
     valkeyClusterAsyncContext *acc;
 
-    cc = valkeyClusterConnect(addrs, flags);
+    cc = valkeyClusterConnect(addrs);
     if (cc == NULL) {
         return NULL;
     }

@@ -31,7 +31,7 @@ There are a variety of ways to setup and connect to a cluster.
 The most basic alternative lacks many options, but can be enough for some use cases.
 
 ```c
-valkeyClusterContext *cc = valkeyClusterConnect("127.0.0.1:6379", VALKEYCLUSTER_FLAG_NULL);
+valkeyClusterContext *cc = valkeyClusterConnect("127.0.0.1:6379");
 if (cc == NULL || cc->err) {
     fprintf(stderr, "Error: %s\n", cc ? cc->errstr : "OOM");
 }
