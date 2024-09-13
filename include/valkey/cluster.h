@@ -155,10 +155,36 @@ typedef struct valkeyClusterNodeIterator {
     dictIterator di;
 } valkeyClusterNodeIterator;
 
+typedef struct {
+    const char *initial_nodes;
+    // TODO: rename to options?
+    int flags;           /* Configuration flags */
+    int max_retry_count; /* Allowed retry attempts */
+    /* timeout value for connect operation. If NULL, no timeout is used. */
+    const struct timeval *connect_timeout;
+    /* timeout value for commands. If NULL, no timeout is used. */
+    const struct timeval *command_timeout;
+    const char *username; /* Authenticate using user */
+    const char *password; /* Authentication password */
+    void (*connect_callback)(const valkeyContext *c,
+                             int status);
+    void (*event_callback)(const struct valkeyClusterContext *cc, int event,
+                           void *privdata);
+    void *event_privdata;
+    void *tls;
+    int (*tls_init_fn)(struct valkeyContext *, struct valkeyTLSContext *);
+    valkeyConnectCallback *onConnect;
+    valkeyConnectCallbackNC *onConnectNC;
+    valkeyDisconnectCallback *onDisconnect;
+    int (*attach_fn)(valkeyAsyncContext *ac, void *attach_data);
+    void *attach_data;
+} valkeyClusterOptions;
+
 /*
  * Synchronous API
  */
 
+valkeyClusterContext *valkeyClusterConnectWithOptions(const valkeyClusterOptions *options);
 valkeyClusterContext *valkeyClusterConnect(const char *addrs);
 valkeyClusterContext *valkeyClusterConnectWithTimeout(const char *addrs,
                                                       const struct timeval tv);
@@ -277,6 +303,7 @@ int valkeyClusterAsyncSetConnectCallbackNC(valkeyClusterAsyncContext *acc,
 int valkeyClusterAsyncSetDisconnectCallback(valkeyClusterAsyncContext *acc,
                                             valkeyDisconnectCallback *fn);
 
+valkeyClusterAsyncContext *valkeyClusterAsyncConnectWithOptions(const valkeyClusterOptions *options);
 /* Connect and update slotmap, will block until complete. */
 valkeyClusterAsyncContext *valkeyClusterAsyncConnect(const char *addrs);
 /* Connect and update slotmap asynchronously using configured event engine. */
