@@ -127,7 +127,7 @@ void test_alloc_failure_handling(void) {
         cc = valkeyClusterContextInit();
         assert(cc);
     }
-    cc->flags |= VALKEYCLUSTER_FLAG_ADD_SLAVE;
+    valkeyClusterSetOptionParseSlaves(cc);
 
     // Add nodes
     {
@@ -500,7 +500,7 @@ void test_alloc_failure_handling_async(void) {
         acc = valkeyClusterAsyncContextInit();
         assert(acc);
     }
-    acc->cc->flags |= VALKEYCLUSTER_FLAG_ADD_SLAVE;
+    valkeyClusterSetOptionParseSlaves(acc->cc);
 
     // Set callbacks
     {
