@@ -42,7 +42,7 @@ void test_parse_cluster_nodes(bool parse_replicas) {
     dictIterator di;
 
     if (parse_replicas)
-        cc->flags |= VALKEYCLUSTER_FLAG_ADD_SLAVE;
+        cc->flags |= VALKEY_FLAG_PARSE_REPLICAS;
 
     valkeyReply *reply = create_cluster_nodes_reply(
         "07c37dfeb235213a872192d90877d0cd55635b91 127.0.0.1:30004@31004,hostname4 slave e7d1eecce10fd6bb5eb35b9f99a514335d9ba9ca 0 1426238317239 4 connected\n"
@@ -254,7 +254,7 @@ void test_parse_cluster_nodes_with_multiple_replicas(void) {
     dictIterator di;
     listIter li;
 
-    cc->flags |= VALKEYCLUSTER_FLAG_ADD_SLAVE;
+    cc->flags |= VALKEY_FLAG_PARSE_REPLICAS;
 
     valkeyReply *reply = create_cluster_nodes_reply(
         "07c37dfeb235213a872192d90877d0cd55635b91 127.0.0.1:30004@31004,hostname4 slave e7d1eecce10fd6bb5eb35b9f99a514335d9ba9ca 0 1426238317239 4 connected\n"
