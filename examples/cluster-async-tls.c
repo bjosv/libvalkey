@@ -55,6 +55,7 @@ int main(int argc, char **argv) {
     UNUSED(argc);
     UNUSED(argv);
 
+    struct event_base *base = event_base_new();
     valkeyTLSContext *tls;
     valkeyTLSContextError tls_error;
 
@@ -66,26 +67,22 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    valkeyClusterAsyncContext *acc = valkeyClusterAsyncContextInit();
-    assert(acc);
-    valkeyClusterAsyncSetConnectCallback(acc, connectCallback);
-    valkeyClusterAsyncSetDisconnectCallback(acc, disconnectCallback);
-    valkeyClusterSetOptionAddNodes(acc->cc, CLUSTER_NODE_TLS);
-    valkeyClusterSetOptionRouteUseSlots(acc->cc);
-    valkeyClusterSetOptionParseSlaves(acc->cc);
-    valkeyClusterSetOptionEnableTLS(acc->cc, tls);
+    valkeyClusterOptions options = {0};
+    options.initial_nodes = CLUSTER_NODE_TLS;
+    options.onConnect = connectCallback;
+    options.onDisconnect = disconnectCallback;
+    options.flags = VALKEYCLUSTER_FLAG_ROUTE_USE_SLOTS;
+    VALKEY_CLUSTER_OPTIONS_SET_SSL(&options, tls);
+    VALKEY_CLUSTER_OPTIONS_SET_ADAPTER_LIBEVENT(&options, base);
 
-    if (valkeyClusterConnect2(acc->cc) != VALKEY_OK) {
-        printf("Error: %s\n", acc->cc->errstr);
+    valkeyClusterAsyncContext *acc = valkeyClusterAsyncConnectWithOptions(&options);
+    if (acc == NULL || acc->err != 0) {
+        printf("Error: %s\n", acc ? acc->errstr : "OOM");
         exit(-1);
     }
 
-    struct event_base *base = event_base_new();
-    valkeyClusterLibeventAttach(acc, base);
-
-    int status;
-    status = valkeyClusterAsyncCommand(acc, setCallback, (char *)"THE_ID",
-                                       "SET %s %s", "key", "value");
+    int status = valkeyClusterAsyncCommand(acc, setCallback, (char *)"THE_ID",
+                                           "SET %s %s", "key", "value");
     if (status != VALKEY_OK) {
         printf("error: err=%d errstr=%s\n", acc->err, acc->errstr);
     }
