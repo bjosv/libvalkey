@@ -3618,12 +3618,13 @@ struct nodeIterator {
     dictIterator di;
 };
 /* Make sure the define VALKEY_NODE_ITERATOR_SIZE is correct. */
+//char __foo[] = {[sizeof(dictIterator)] = ""};
 vk_static_assert(sizeof(struct nodeIterator) == VALKEY_NODE_ITERATOR_SIZE);
 
 /* Initiate an iterator for iterating over current cluster nodes */
 void valkeyClusterInitNodeIterator(valkeyClusterNodeIterator *iter,
                                    valkeyClusterContext *cc) {
-    struct nodeIterator *ni = (struct nodeIterator*) iter;
+    struct nodeIterator *ni = (struct nodeIterator *)iter;
     ni->cc = cc;
     ni->route_version = cc->route_version;
     dictInitIterator(&ni->di, cc->nodes);
@@ -3634,7 +3635,7 @@ void valkeyClusterInitNodeIterator(valkeyClusterNodeIterator *iter,
  * The iterator will restart if the routing table is updated
  * before all nodes have been iterated. */
 valkeyClusterNode *valkeyClusterNodeNext(valkeyClusterNodeIterator *iter) {
-    struct nodeIterator *ni = (struct nodeIterator*) iter;
+    struct nodeIterator *ni = (struct nodeIterator *)iter;
     if (ni->retries_left <= 0)
         return NULL;
 

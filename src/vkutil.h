@@ -37,7 +37,7 @@
 #include <sys/types.h>
 
 /* Static assert macro for C99 */
-#define vk_static_assert(cond) enum { static_assert = 1 / (!!(cond)) }
+#define vk_static_assert(cond) extern char(*vk_static_assert(void))[sizeof(char[1 - 2 * !(cond)])]
 
 /*
  * Wrapper to workaround well known, safe, implicit type conversion when

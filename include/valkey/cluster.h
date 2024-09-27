@@ -148,7 +148,19 @@ typedef struct valkeyClusterAsyncContext {
 
 } valkeyClusterAsyncContext;
 
+#if UINTPTR_MAX == UINT64_MAX
 #define VALKEY_NODE_ITERATOR_SIZE 56
+#elif defined(__arm__)
+#define VALKEY_NODE_ITERATOR_SIZE 40
+#else
+#define VALKEY_NODE_ITERATOR_SIZE 32
+#endif
+//#define VALKEY_NODE_ITERATOR_SIZE sizeof(void*) + sizeof(uint64_t) + sizeof(int) + (sizeof(int) + 3 * sizeof(void*))
+
+//-m32  #define VALKEY_NODE_ITERATOR_SIZE 32
+//qemu arm  #define VALKEY_NODE_ITERATOR_SIZE 40
+//freebsd fail
+
 typedef struct valkeyClusterNodeIterator {
     char opaque_data[VALKEY_NODE_ITERATOR_SIZE];
 } valkeyClusterNodeIterator;

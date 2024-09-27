@@ -14,6 +14,8 @@ jobs:
     - name: Install prerequisites
       run: sudo apt-get update && sudo apt-get install -y libev-dev libevent-dev libglib2.0-dev libssl-dev valgrind
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+    - name: Get ENV
+      run: echo | gcc -dM -E -
     - name: Run make
       run: make all examples
     - name: Run unittests
@@ -31,6 +33,8 @@ jobs:
     - name: Install prerequisites
       run: sudo apt-get update && sudo apt-get install gcc-multilib
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+    - name: Get ENV
+      run: echo | gcc -dM -E -
     - name: Run make
       run: make 32bit
     - name: Run unittests
@@ -42,6 +46,7 @@ jobs:
     name: Cross-compile and test arm linux with Qemu
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: arm
@@ -53,12 +58,12 @@ jobs:
 
     steps:
     - name: Install qemu
-      if: matrix.emulator
       run: sudo apt-get update && sudo apt-get install -y qemu-user
     - name: Install platform toolset
-      if: matrix.toolset
       run: sudo apt-get install -y gcc-${{matrix.toolset}}
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+    - name: Get ENV
+      run: echo | ${{matrix.toolset}}-gcc -dM -E -
     - name: Run make
       run: make all
       env:
