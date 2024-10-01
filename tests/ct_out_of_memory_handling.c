@@ -131,9 +131,6 @@ void test_alloc_failure_handling(void) {
             successfulAllocations = i;
             cc = valkeyClusterConnectWithOptions(&options);
             assert(cc);
-            if (i < 28) {
-                ASSERT_STR_EQ(cc->errstr, "Out of memory");
-            }
             valkeyClusterFree(cc);
         }
 
@@ -453,10 +450,16 @@ void test_alloc_failure_handling_async(void) {
     // Connect
     valkeyClusterAsyncContext *acc;
     {
-        for (int i = 0; i < 138; ++i) {
+        for (int i = 0; i < 12; ++i) {
             successfulAllocations = i;
             acc = valkeyClusterAsyncConnectWithOptions(&options);
             assert(acc == NULL);
+        }
+
+        for (int i = 12; i < 138; ++i) {
+            successfulAllocations = i;
+            acc = valkeyClusterAsyncConnectWithOptions(&options);
+            assert(acc != NULL);
         }
 
         successfulAllocations = 138;

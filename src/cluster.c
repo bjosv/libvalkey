@@ -1346,7 +1346,7 @@ int valkeyClusterUpdateSlotmap(valkeyClusterContext *cc) {
     return VALKEY_ERR;
 }
 
-valkeyClusterContext *valkeyClusterContextInit(void) {
+valkeyClusterContext *valkeyClusterContextInit(const valkeyClusterOptions *options) {
     valkeyClusterContext *cc;
 
     cc = vk_calloc(1, sizeof(valkeyClusterContext));
@@ -1354,42 +1354,6 @@ valkeyClusterContext *valkeyClusterContextInit(void) {
         return NULL;
 
     cc->max_retry_count = CLUSTER_DEFAULT_MAX_RETRY_COUNT;
-    return cc;
-}
-
-void valkeyClusterFree(valkeyClusterContext *cc) {
-    if (cc == NULL)
-        return;
-
-    if (cc->event_callback) {
-        cc->event_callback(cc, VALKEYCLUSTER_EVENT_FREE_CONTEXT,
-                           cc->event_privdata);
-    }
-
-    vk_free(cc->connect_timeout);
-    vk_free(cc->command_timeout);
-    vk_free(cc->username);
-    vk_free(cc->password);
-    vk_free(cc->table);
-
-    if (cc->nodes != NULL) {
-        dictRelease(cc->nodes);
-    }
-
-    if (cc->requests != NULL) {
-        listRelease(cc->requests);
-    }
-
-    memset(cc, 0xff, sizeof(*cc));
-    vk_free(cc);
-}
-
-valkeyClusterContext *valkeyClusterConnectWithOptions(const valkeyClusterOptions *options) {
-    valkeyClusterContext *cc = valkeyClusterContextInit();
-    if (cc == NULL) {
-        return NULL;
-    }
-
     cc->flags = options->flags;
     if (options->max_retry_count > 0) {
         cc->max_retry_count = options->max_retry_count;
@@ -1423,6 +1387,42 @@ valkeyClusterContext *valkeyClusterConnectWithOptions(const valkeyClusterOptions
     if (options->tls) {
         cc->tls = options->tls;
         cc->tls_init_fn = options->tls_init_fn;
+    }
+
+    return cc;
+}
+
+void valkeyClusterFree(valkeyClusterContext *cc) {
+    if (cc == NULL)
+        return;
+
+    if (cc->event_callback) {
+        cc->event_callback(cc, VALKEYCLUSTER_EVENT_FREE_CONTEXT,
+                           cc->event_privdata);
+    }
+
+    vk_free(cc->connect_timeout);
+    vk_free(cc->command_timeout);
+    vk_free(cc->username);
+    vk_free(cc->password);
+    vk_free(cc->table);
+
+    if (cc->nodes != NULL) {
+        dictRelease(cc->nodes);
+    }
+
+    if (cc->requests != NULL) {
+        listRelease(cc->requests);
+    }
+
+    memset(cc, 0xff, sizeof(*cc));
+    vk_free(cc);
+}
+
+valkeyClusterContext *valkeyClusterConnectWithOptions(const valkeyClusterOptions *options) {
+    valkeyClusterContext *cc = valkeyClusterContextInit(options);
+    if (cc == NULL) {
+        return NULL;
     }
 
     valkeyClusterUpdateSlotmap(cc);
@@ -2949,11 +2949,11 @@ valkeyClusterGetValkeyAsyncContext(valkeyClusterAsyncContext *acc,
     return ac;
 }
 
-valkeyClusterAsyncContext *valkeyClusterAsyncContextInit(void) {
+valkeyClusterAsyncContext *valkeyClusterAsyncContextInit(const valkeyClusterOptions *options) {
     valkeyClusterContext *cc;
     valkeyClusterAsyncContext *acc;
 
-    cc = valkeyClusterContextInit();
+    cc = valkeyClusterContextInit(options);
     if (cc == NULL) {
         return NULL;
     }
@@ -2964,21 +2964,6 @@ valkeyClusterAsyncContext *valkeyClusterAsyncContextInit(void) {
         return NULL;
     }
 
-    return acc;
-}
-
-valkeyClusterAsyncContext *valkeyClusterAsyncConnectWithOptions(const valkeyClusterOptions *options) {
-
-    valkeyClusterContext *cc = valkeyClusterConnectWithOptions(options);
-    if (cc == NULL) {
-        return NULL;
-    }
-
-    valkeyClusterAsyncContext *acc = valkeyClusterAsyncInitialize(cc);
-    if (acc == NULL) {
-        valkeyClusterFree(cc);
-        return NULL;
-    }
     if (options->onConnect != NULL) {
         acc->onConnect = options->onConnect;
     }
@@ -2996,18 +2981,25 @@ valkeyClusterAsyncContext *valkeyClusterAsyncConnectWithOptions(const valkeyClus
     return acc;
 }
 
-valkeyClusterAsyncContext *valkeyClusterAsyncConnect(const char *addrs) {
-    valkeyClusterOptions options = {0};
-    options.initial_nodes = addrs;
+valkeyClusterAsyncContext *valkeyClusterAsyncConnectWithOptions(const valkeyClusterOptions *options) {
+    valkeyClusterAsyncContext *acc = valkeyClusterAsyncContextInit(options);
+    if (acc == NULL) {
+        return NULL;
+    }
 
-    return valkeyClusterAsyncConnectWithOptions(&options);
+    //TODO: valkeyClusterAsyncConnect(acc);
+    if (valkeyClusterUpdateSlotmap(acc->cc) != VALKEY_OK) {
+        valkeyClusterAsyncSetError(acc, acc->cc->err, acc->cc->errstr);
+    }
+    return acc;
 }
 
-int valkeyClusterAsyncConnect2(valkeyClusterAsyncContext *acc) {
+int valkeyClusterAsyncConnect(valkeyClusterAsyncContext *acc) {
     /* An attach function for an async event library is required. */
     if (acc->attach_fn == NULL) {
         return VALKEY_ERR;
     }
+    /* TODO: add options to use: valkeyClusterUpdateSlotmap(acc->cc); */
     return updateSlotMapAsync(acc, NULL /*any node*/);
 }
 

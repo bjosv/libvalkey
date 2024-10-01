@@ -184,13 +184,13 @@ typedef struct {
  * Synchronous API
  */
 
+valkeyClusterContext *valkeyClusterContextInit(const valkeyClusterOptions *options);
 valkeyClusterContext *valkeyClusterConnectWithOptions(const valkeyClusterOptions *options);
 valkeyClusterContext *valkeyClusterConnect(const char *addrs);
 valkeyClusterContext *valkeyClusterConnectWithTimeout(const char *addrs,
                                                       const struct timeval tv);
 int valkeyClusterConnect2(valkeyClusterContext *cc);
 
-valkeyClusterContext *valkeyClusterContextInit(void);
 void valkeyClusterFree(valkeyClusterContext *cc);
 
 /* Configuration options */
@@ -293,7 +293,10 @@ valkeyContext *valkeyClusterGetValkeyContext(valkeyClusterContext *cc,
  * Asynchronous API
  */
 
-valkeyClusterAsyncContext *valkeyClusterAsyncContextInit(void);
+valkeyClusterAsyncContext *valkeyClusterAsyncConnectWithOptions(const valkeyClusterOptions *options);
+valkeyClusterAsyncContext *valkeyClusterAsyncContextInit(const valkeyClusterOptions *options);
+int valkeyClusterAsyncConnect(valkeyClusterAsyncContext *acc); /* Connect an initiated context. */
+void valkeyClusterAsyncDisconnect(valkeyClusterAsyncContext *acc);
 void valkeyClusterAsyncFree(valkeyClusterAsyncContext *acc);
 
 int valkeyClusterAsyncSetConnectCallback(valkeyClusterAsyncContext *acc,
@@ -302,13 +305,6 @@ int valkeyClusterAsyncSetConnectCallbackNC(valkeyClusterAsyncContext *acc,
                                            valkeyConnectCallbackNC *fn);
 int valkeyClusterAsyncSetDisconnectCallback(valkeyClusterAsyncContext *acc,
                                             valkeyDisconnectCallback *fn);
-
-valkeyClusterAsyncContext *valkeyClusterAsyncConnectWithOptions(const valkeyClusterOptions *options);
-/* Connect and update slotmap, will block until complete. */
-valkeyClusterAsyncContext *valkeyClusterAsyncConnect(const char *addrs);
-/* Connect and update slotmap asynchronously using configured event engine. */
-int valkeyClusterAsyncConnect2(valkeyClusterAsyncContext *acc);
-void valkeyClusterAsyncDisconnect(valkeyClusterAsyncContext *acc);
 
 /* Commands */
 int valkeyClusterAsyncCommand(valkeyClusterAsyncContext *acc,
