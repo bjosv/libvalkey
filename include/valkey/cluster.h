@@ -294,8 +294,12 @@ valkeyContext *valkeyClusterGetValkeyContext(valkeyClusterContext *cc,
  * Asynchronous API
  */
 
-valkeyClusterAsyncContext *valkeyClusterAsyncContextInit(void);
+valkeyClusterAsyncContext *valkeyClusterAsyncConnectWithOptions(const valkeyClusterOptions *options);
+void valkeyClusterAsyncDisconnect(valkeyClusterAsyncContext *acc);
 void valkeyClusterAsyncFree(valkeyClusterAsyncContext *acc);
+
+valkeyClusterAsyncContext *valkeyClusterAsyncContextInit(const valkeyClusterOptions *options);
+int valkeyClusterAsyncConnect(valkeyClusterAsyncContext *acc); /* Connect an initiated context. */
 
 int valkeyClusterAsyncSetConnectCallback(valkeyClusterAsyncContext *acc,
                                          valkeyConnectCallback *fn);
@@ -303,12 +307,6 @@ int valkeyClusterAsyncSetConnectCallbackNC(valkeyClusterAsyncContext *acc,
                                            valkeyConnectCallbackNC *fn);
 int valkeyClusterAsyncSetDisconnectCallback(valkeyClusterAsyncContext *acc,
                                             valkeyDisconnectCallback *fn);
-
-/* Connect and update slotmap, will block until complete. */
-valkeyClusterAsyncContext *valkeyClusterAsyncConnect(const char *addrs);
-/* Connect and update slotmap asynchronously using configured event engine. */
-int valkeyClusterAsyncConnect2(valkeyClusterAsyncContext *acc);
-void valkeyClusterAsyncDisconnect(valkeyClusterAsyncContext *acc);
 
 /* Commands */
 int valkeyClusterAsyncCommand(valkeyClusterAsyncContext *acc,
