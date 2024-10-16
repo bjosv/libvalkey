@@ -127,11 +127,8 @@ void disconnectCallback(const valkeyAsyncContext *ac, int status) {
 /* Helper to modify keys using a separate client. */
 void modifyKey(const char *key, const char *value) {
     printf("Modify key: '%s'\n", key);
-    valkeyClusterContext *cc = valkeyClusterContextInit();
-    int status = valkeyClusterSetOptionAddNodes(cc, CLUSTER_NODE);
-    assert(status == VALKEY_OK);
-    status = valkeyClusterConnect2(cc);
-    assert(status == VALKEY_OK);
+    valkeyClusterContext *cc = valkeyClusterConnect(CLUSTER_NODE);
+    assert(cc);
 
     valkeyReply *reply = valkeyClusterCommand(cc, "SET %s %s", key, value);
     assert(reply != NULL);

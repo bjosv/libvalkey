@@ -145,16 +145,54 @@ typedef struct valkeyClusterNodeIterator {
     char opaque_data[VALKEY_NODE_ITERATOR_SIZE];
 } valkeyClusterNodeIterator;
 
+/* Configuration options:
+ * Enable slotmap updates using the command CLUSTER SLOTS.
+ * Default is the CLUSTER NODES command. */
+#define VALKEY_OPT_USE_CLUSTER_SLOTS 0x1000
+/* Enable parsing of replica nodes. Currently not used, but the
+ * information is added to its primary node structure. */
+#define VALKEY_OPT_USE_REPLICAS 0x2000
+
+typedef struct {
+    const char *initial_nodes;
+    int options;                           /* Bit field of VALKEY_OPT_xxx */
+    const struct timeval *connect_timeout; /* Timeout value for connect, no timeout if NULL. */
+    const struct timeval *command_timeout; /* Timeout value for commands, no timeout if NULL. */
+    const char *username;                  /* Authentication username. */
+    const char *password;                  /* Authentication password. */
+    int max_retry_count;                   /* Allowed retry attempts. */
+
+    /* TLS enabled using VALKEY_CLUSTER_OPTIONS_SET_SSL macro. */
+    void *tls;
+    int (*tls_init_fn)(struct valkeyContext *, struct valkeyTLSContext *);
+
+    /* Synchronous API callbacks */
+    void (*connect_callback)(const valkeyContext *c,
+                             int status);
+    void (*event_callback)(const struct valkeyClusterContext *cc, int event,
+                           void *privdata);
+    void *event_privdata;
+
+    /* Async API event engine adapter.  */
+    int (*attach_fn)(valkeyAsyncContext *ac, void *attach_data);
+    void *attach_data;
+
+    /* Async API callbacks. */
+    valkeyConnectCallback *onConnect;
+    valkeyConnectCallbackNC *onConnectNC;
+    valkeyDisconnectCallback *onDisconnect;
+} valkeyClusterOptions;
+
 /*
  * Synchronous API
  */
 
+valkeyClusterContext *valkeyClusterConnectWithOptions(const valkeyClusterOptions *options);
 valkeyClusterContext *valkeyClusterConnect(const char *addrs);
 valkeyClusterContext *valkeyClusterConnectWithTimeout(const char *addrs,
                                                       const struct timeval tv);
 int valkeyClusterConnect2(valkeyClusterContext *cc);
 
-valkeyClusterContext *valkeyClusterContextInit(void);
 void valkeyClusterFree(valkeyClusterContext *cc);
 
 /* Configuration options */
