@@ -195,20 +195,9 @@ int valkeyClusterConnect2(valkeyClusterContext *cc);
 
 void valkeyClusterFree(valkeyClusterContext *cc);
 
-/* Configuration options */
-int valkeyClusterSetOptionAddNodes(valkeyClusterContext *cc, const char *addrs);
-int valkeyClusterSetOptionUsername(valkeyClusterContext *cc,
-                                   const char *username);
-int valkeyClusterSetOptionPassword(valkeyClusterContext *cc,
-                                   const char *password);
-int valkeyClusterSetOptionParseSlaves(valkeyClusterContext *cc);
-int valkeyClusterSetOptionRouteUseSlots(valkeyClusterContext *cc);
-int valkeyClusterSetOptionConnectTimeout(valkeyClusterContext *cc,
-                                         const struct timeval tv);
-int valkeyClusterSetOptionTimeout(valkeyClusterContext *cc,
-                                  const struct timeval tv);
-int valkeyClusterSetOptionMaxRetry(valkeyClusterContext *cc,
-                                   int max_retry_count);
+/* Options configurable in runtime. */
+int valkeyClusterSetOptionTimeout(valkeyClusterContext *cc, const struct timeval tv);
+
 /* A hook for connect and reconnect attempts, e.g. for applying additional
  * socket options. This is called just after connect, before TLS handshake and
  * Valkey authentication.
