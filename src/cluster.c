@@ -109,6 +109,10 @@ static void cluster_slot_destroy(cluster_slot *slot);
 static int updateNodesAndSlotmap(valkeyClusterContext *cc, dict *nodes);
 static int updateSlotMapAsync(valkeyClusterAsyncContext *acc,
                               valkeyAsyncContext *ac);
+static int valkeyClusterSetOptionAddNodes(valkeyClusterContext *cc, const char *addrs);
+static int valkeyClusterSetOptionConnectTimeout(valkeyClusterContext *cc, const struct timeval tv);
+static int valkeyClusterSetOptionPassword(valkeyClusterContext *cc, const char *password);
+static int valkeyClusterSetOptionUsername(valkeyClusterContext *cc, const char *username);
 
 void listClusterNodeDestructor(void *val) { freeValkeyClusterNode(val); }
 
@@ -1446,8 +1450,8 @@ error:
     return VALKEY_ERR;
 }
 
-int valkeyClusterSetOptionAddNodes(valkeyClusterContext *cc,
-                                   const char *addrs) {
+static int valkeyClusterSetOptionAddNodes(valkeyClusterContext *cc,
+                                          const char *addrs) {
     int ret;
     sds *address = NULL;
     int address_count = 0;
@@ -1491,8 +1495,8 @@ int valkeyClusterSetOptionAddNodes(valkeyClusterContext *cc,
  * Disabled by default. Can be disabled again by providing an
  * empty string or a null pointer.
  */
-int valkeyClusterSetOptionUsername(valkeyClusterContext *cc,
-                                   const char *username) {
+static int valkeyClusterSetOptionUsername(valkeyClusterContext *cc,
+                                          const char *username) {
     if (cc == NULL) {
         return VALKEY_ERR;
     }
@@ -1517,8 +1521,8 @@ int valkeyClusterSetOptionUsername(valkeyClusterContext *cc,
  * Configure a password used when connecting to password-protected
  * Valkey instances. (See Valkey AUTH command)
  */
-int valkeyClusterSetOptionPassword(valkeyClusterContext *cc,
-                                   const char *password) {
+static int valkeyClusterSetOptionPassword(valkeyClusterContext *cc,
+                                          const char *password) {
 
     if (cc == NULL) {
         return VALKEY_ERR;
@@ -1540,30 +1544,8 @@ int valkeyClusterSetOptionPassword(valkeyClusterContext *cc,
     return VALKEY_OK;
 }
 
-int valkeyClusterSetOptionParseSlaves(valkeyClusterContext *cc) {
-
-    if (cc == NULL) {
-        return VALKEY_ERR;
-    }
-
-    cc->flags |= VALKEY_FLAG_PARSE_REPLICAS;
-
-    return VALKEY_OK;
-}
-
-int valkeyClusterSetOptionRouteUseSlots(valkeyClusterContext *cc) {
-
-    if (cc == NULL) {
-        return VALKEY_ERR;
-    }
-
-    cc->flags |= VALKEY_FLAG_USE_CLUSTER_SLOTS;
-
-    return VALKEY_OK;
-}
-
-int valkeyClusterSetOptionConnectTimeout(valkeyClusterContext *cc,
-                                         const struct timeval tv) {
+static int valkeyClusterSetOptionConnectTimeout(valkeyClusterContext *cc,
+                                                const struct timeval tv) {
 
     if (cc == NULL) {
         return VALKEY_ERR;
@@ -1639,17 +1621,6 @@ int valkeyClusterSetOptionTimeout(valkeyClusterContext *cc,
             }
         }
     }
-
-    return VALKEY_OK;
-}
-
-int valkeyClusterSetOptionMaxRetry(valkeyClusterContext *cc,
-                                   int max_retry_count) {
-    if (cc == NULL || max_retry_count <= 0) {
-        return VALKEY_ERR;
-    }
-
-    cc->max_retry_count = max_retry_count;
 
     return VALKEY_OK;
 }
@@ -2860,23 +2831,6 @@ int valkeyClusterAsyncConnect(valkeyClusterAsyncContext *acc) {
     }
     /* TODO: add options to use: valkeyClusterUpdateSlotmap(acc->cc); */
     return updateSlotMapAsync(acc, NULL /*any node*/);
-}
-
-int valkeyClusterAsyncSetConnectCallback(valkeyClusterAsyncContext *acc,
-                                         valkeyConnectCallback *fn) {
-    if (acc->onConnect != NULL)
-        return VALKEY_ERR;
-    acc->onConnect = fn;
-    return VALKEY_OK;
-}
-
-int valkeyClusterAsyncSetDisconnectCallback(valkeyClusterAsyncContext *acc,
-                                            valkeyDisconnectCallback *fn) {
-    if (acc->onDisconnect == NULL) {
-        acc->onDisconnect = fn;
-        return VALKEY_OK;
-    }
-    return VALKEY_ERR;
 }
 
 int valkeyClusterAsyncSetEventCallback(valkeyClusterAsyncContext *acc,
