@@ -318,7 +318,8 @@ void test_async_to_single_node(void) {
 
     valkeyClusterOptions options = {0};
     options.initial_nodes = CLUSTER_NODE;
-    options.options = VALKEY_OPT_USE_CLUSTER_SLOTS;
+    options.options = VALKEY_OPT_USE_CLUSTER_SLOTS |
+                      VALKEY_OPT_BLOCKING_INITIAL_UPDATE;
     options.max_retry_count = 1;
     options.onConnect = callbackExpectOk;
     options.onDisconnect = callbackExpectOk;
@@ -348,7 +349,8 @@ void test_async_formatted_to_single_node(void) {
 
     valkeyClusterOptions options = {0};
     options.initial_nodes = CLUSTER_NODE;
-    options.options = VALKEY_OPT_USE_CLUSTER_SLOTS;
+    options.options = VALKEY_OPT_USE_CLUSTER_SLOTS |
+                      VALKEY_OPT_BLOCKING_INITIAL_UPDATE;
     options.max_retry_count = 1;
     options.onConnect = callbackExpectOk;
     options.onDisconnect = callbackExpectOk;
@@ -379,7 +381,8 @@ void test_async_command_argv_to_single_node(void) {
 
     valkeyClusterOptions options = {0};
     options.initial_nodes = CLUSTER_NODE;
-    options.options = VALKEY_OPT_USE_CLUSTER_SLOTS;
+    options.options = VALKEY_OPT_USE_CLUSTER_SLOTS |
+                      VALKEY_OPT_BLOCKING_INITIAL_UPDATE;
     options.max_retry_count = 1;
     options.onConnect = callbackExpectOk;
     options.onDisconnect = callbackExpectOk;
@@ -410,7 +413,8 @@ void test_async_to_all_nodes(void) {
 
     valkeyClusterOptions options = {0};
     options.initial_nodes = CLUSTER_NODE;
-    options.options = VALKEY_OPT_USE_CLUSTER_SLOTS;
+    options.options = VALKEY_OPT_USE_CLUSTER_SLOTS |
+                      VALKEY_OPT_BLOCKING_INITIAL_UPDATE;
     options.max_retry_count = 1;
     options.onConnect = callbackExpectOk;
     options.onDisconnect = callbackExpectOk;
@@ -450,7 +454,8 @@ void test_async_transaction(void) {
 
     valkeyClusterOptions options = {0};
     options.initial_nodes = CLUSTER_NODE;
-    options.options = VALKEY_OPT_USE_CLUSTER_SLOTS;
+    options.options = VALKEY_OPT_USE_CLUSTER_SLOTS |
+                      VALKEY_OPT_BLOCKING_INITIAL_UPDATE;
     options.max_retry_count = 1;
     options.onConnect = callbackExpectOk;
     options.onDisconnect = callbackExpectOk;

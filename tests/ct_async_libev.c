@@ -37,6 +37,7 @@ int main(int argc, char **argv) {
 
     valkeyClusterOptions options = {0};
     options.initial_nodes = CLUSTER_NODE;
+    options.options = VALKEY_OPT_BLOCKING_INITIAL_UPDATE;
     options.onConnect = connectCallback;
     options.onDisconnect = disconnectCallback;
     VALKEY_CLUSTER_OPTIONS_SET_ADAPTER_LIBEV(&options, EV_DEFAULT);

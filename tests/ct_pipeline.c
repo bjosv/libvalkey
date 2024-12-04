@@ -92,6 +92,7 @@ void test_async_pipeline(void) {
 
     valkeyClusterOptions options = {0};
     options.initial_nodes = CLUSTER_NODE;
+    options.options = VALKEY_OPT_BLOCKING_INITIAL_UPDATE;
     options.onConnect = callbackExpectOk;
     options.onDisconnect = callbackExpectOk;
     VALKEY_CLUSTER_OPTIONS_SET_ADAPTER_LIBEVENT(&options, base);
