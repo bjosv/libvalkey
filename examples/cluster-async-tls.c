@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     options.onConnect = connectCallback;
     options.onDisconnect = disconnectCallback;
     options.options = VALKEY_OPT_USE_CLUSTER_SLOTS;
-    VALKEY_CLUSTER_OPTIONS_SET_SSL(&options, tls);
+    valkeyClusterSetOptionEnableTLS(&options, tls);
 
     struct event_base *base = event_base_new();
     VALKEY_CLUSTER_OPTIONS_SET_ADAPTER_LIBEVENT(&options, base);

@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
     options.initial_nodes = CLUSTER_NODE_TLS;
     options.connect_timeout = &timeout;
     options.options = VALKEY_OPT_USE_CLUSTER_SLOTS;
-    VALKEY_CLUSTER_OPTIONS_SET_SSL(&options, tls);
+    valkeyClusterSetOptionEnableTLS(&options, tls);
 
     valkeyClusterContext *cc = valkeyClusterConnectWithOptions(&options);
     if (!cc) {

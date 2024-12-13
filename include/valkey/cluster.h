@@ -164,7 +164,7 @@ typedef struct {
     const char *password;                  /* Authentication password. */
     int max_retry_count;                   /* Allowed retry attempts. */
 
-    /* TLS enabled using VALKEY_CLUSTER_OPTIONS_SET_SSL macro. */
+    /* TLS set by valkeyClusterSetOptionEnableTLS. */
     void *tls;
     int (*tls_init_fn)(struct valkeyContext *, struct valkeyTLSContext *);
 
