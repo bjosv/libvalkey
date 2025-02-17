@@ -1573,7 +1573,9 @@ static void test_throughput(struct config config) {
         valkeyAppendCommand(c, "LRANGE mylist 0 499");
     t1 = usec();
     for (i = 0; i < num; i++) {
-        assert(valkeyGetReply(c, (void *)&replies[i]) == VALKEY_OK);
+        int res = valkeyGetReply(c, (void *)&replies[i]);
+        printf("[%d = %d]", i, res);
+        assert(res == VALKEY_OK);
         assert(replies[i] != NULL && replies[i]->type == VALKEY_REPLY_ARRAY);
         assert(replies[i] != NULL && replies[i]->elements == 500);
     }

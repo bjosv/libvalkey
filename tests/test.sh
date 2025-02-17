@@ -31,6 +31,7 @@ tmpdir=$(mktemp -d)
 PID_FILE=${tmpdir}/libvalkey-test-valkey.pid
 SOCK_FILE=${tmpdir}/libvalkey-test-valkey.sock
 CONF_FILE=${tmpdir}/valkey.conf
+LOG_FILE=${tmpdir}/valkey.log
 
 if [ "$TEST_TLS" = "1" ]; then
     TLS_CA_CERT=${tmpdir}/ca.crt
@@ -66,7 +67,10 @@ cleanup() {
   if [ -n "${VALKEY_DOCKER}" ] ; then
     docker kill valkey-test-server
   else
-    set +e
+      set +e
+      2>&1 echo "LOG:"
+      cat ${LOG_FILE}
+      2>&1 echo "LOG DONE"
     kill $(cat ${PID_FILE})
   fi
   rm -rf ${tmpdir}
@@ -79,6 +83,8 @@ pidfile ${PID_FILE}
 port ${VALKEY_PORT}
 unixsocket ${SOCK_FILE}
 unixsocketperm 777
+loglevel debug
+logfile ${LOG_FILE}
 EOF
 
 # if not running in docker add these:
