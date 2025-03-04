@@ -38,12 +38,12 @@
 #include "adlist.h"
 #include "alloc.h"
 #include "command.h"
-#include "dict.h"
 #include "sds.h"
 #include "vkutil.h"
 
 #include <assert.h>
 #include <ctype.h>
+#include <dict.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
