@@ -15,7 +15,7 @@
 #endif
 #include "adapters/poll.h"
 #include "async.h"
-#include "sds.h"
+#include <sds.h>
 #include "valkey.h"
 #include "valkey_private.h"
 

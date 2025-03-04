@@ -41,13 +41,13 @@
 
 #include "alloc.h"
 #include "read.h"
-#include "sds.h"
 
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <math.h>
+#include <sds.h>
 
 /* Initial size of our nested reply stack and how much we grow it when needd */
 #define VALKEY_READER_STACK_SIZE 9
@@ -799,8 +799,12 @@ int valkeyReaderGetReply(valkeyReader *r, void **reply) {
     /* Discard part of the buffer when we've consumed at least 1k, to avoid
      * doing unnecessary calls to memmove() in sds.c. */
     if (r->pos >= 1024) {
-        if (sdsrange(r->buf, r->pos, -1) < 0)
+        if (sdslen(r->buf) > SSIZE_MAX)
             return VALKEY_ERR;
+        sdsrange(r->buf, r->pos, -1);
+
+        /* if (sdsrange(r->buf, r->pos, -1) < 0) */
+        /*     return VALKEY_ERR; */
         r->pos = 0;
         r->len = sdslen(r->buf);
     }

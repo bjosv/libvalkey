@@ -43,13 +43,13 @@
 #include "async.h"
 #include "async_private.h"
 #include "net.h"
-#include "sds.h"
 #include "valkey_private.h"
 
 #include <assert.h>
 #include <ctype.h>
 #include <dict.h>
 #include <errno.h>
+#include <sds.h>
 
 #ifdef NDEBUG
 #undef assert

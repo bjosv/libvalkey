@@ -38,13 +38,13 @@
 #include "net.h"
 
 #include "async.h"
-#include "sds.h"
 #include "sockcompat.h"
 #include "valkey_private.h"
 
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <sds.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -33,10 +33,10 @@
 
 #include "win32.h"
 
-#include "sds.h"
 #include "valkey.h"
 
 #include <limits.h>
+#include <sds.h>
 #include <string.h>
 
 void valkeySetError(valkeyContext *c, int type, const char *str);

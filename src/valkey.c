@@ -37,12 +37,12 @@
 #include "valkey.h"
 
 #include "net.h"
-#include "sds.h"
 #include "valkey_private.h"
 
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <sds.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -1030,8 +1030,12 @@ int valkeyBufferWrite(valkeyContext *c, int *done) {
                 if (c->obuf == NULL)
                     goto oom;
             } else {
-                if (sdsrange(c->obuf, nwritten, -1) < 0)
+                if (sdslen(c->obuf) > SSIZE_MAX)
                     goto oom;
+                sdsrange(c->obuf, nwritten, -1);
+
+                /* if (sdsrange(c->obuf, nwritten, -1) < 0) */
+                /*     goto oom; */
             }
         }
     }
