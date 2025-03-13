@@ -2937,10 +2937,8 @@ static void valkeyClusterAsyncCallback(valkeyAsyncContext *ac, void *r,
     cluster_async_data *cad = privdata;
     valkeyClusterAsyncContext *acc;
     valkeyClusterContext *cc;
-    valkeyAsyncContext *ac_retry = NULL;
     int error_type;
     valkeyClusterNode *node;
-    struct cmd *command;
 
     if (cad == NULL) {
         goto error;
@@ -2953,11 +2951,6 @@ static void valkeyClusterAsyncCallback(valkeyAsyncContext *ac, void *r,
 
     cc = &acc->cc;
     if (cc == NULL) {
-        goto error;
-    }
-
-    command = cad->command;
-    if (command == NULL) {
         goto error;
     }
 
@@ -2989,6 +2982,7 @@ static void valkeyClusterAsyncCallback(valkeyAsyncContext *ac, void *r,
             goto done;
         }
 
+        valkeyAsyncContext *ac_retry = NULL;
         int slot = -1;
         switch (error_type) {
         case CLUSTER_ERR_MOVED:
@@ -3038,11 +3032,17 @@ static void valkeyClusterAsyncCallback(valkeyAsyncContext *ac, void *r,
             break;
         }
 
-        goto retry;
+        /* Retry the command. */
+        struct cmd *command = cad->command;
+        assert(command);
+        if (valkeyAsyncFormattedCommand(ac_retry, valkeyClusterAsyncCallback, cad,
+                                        command->cmd, command->clen) != VALKEY_OK) {
+            goto error;
+        }
+        return;
     }
 
 done:
-
     if (acc->err) {
         cad->callback(acc, NULL, cad->privdata);
     } else {
@@ -3051,22 +3051,7 @@ done:
 
     valkeyClusterAsyncClearError(acc);
 
-    cluster_async_data_free(cad);
-
-    return;
-
-retry:
-
-    ret = valkeyAsyncFormattedCommand(ac_retry, valkeyClusterAsyncCallback, cad,
-                                      command->cmd, command->clen);
-    if (ret != VALKEY_OK) {
-        goto error;
-    }
-
-    return;
-
 error:
-
     cluster_async_data_free(cad);
 }
 
