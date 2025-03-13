@@ -2978,7 +2978,6 @@ static void valkeyClusterAsyncCallback(valkeyAsyncContext *ac, void *r,
                 cc->table[slot] = node;
             }
             ac_retry = valkeyClusterGetValkeyAsyncContext(acc, node);
-
             break;
         case CLUSTER_ERR_ASK:
             node = getNodeFromRedirectReply(cc, reply, NULL);
@@ -2998,16 +2997,10 @@ static void valkeyClusterAsyncCallback(valkeyAsyncContext *ac, void *r,
             if (ret != VALKEY_OK) {
                 goto error;
             }
-
             break;
         case CLUSTER_ERR_TRYAGAIN:
         case CLUSTER_ERR_CLUSTERDOWN:
             ac_retry = ac;
-
-            break;
-        default:
-
-            goto done;
             break;
         }
 
