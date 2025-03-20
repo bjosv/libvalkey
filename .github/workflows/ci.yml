@@ -191,7 +191,8 @@ jobs:
       - name: Generate makefiles
         run: |
           mkdir build && cd build
-          cmake -DENABLE_TLS=ON -DENABLE_IPV6_TESTS=ON -DENABLE_EXAMPLES=ON ..
+          cmake -DENABLE_IPV6_TESTS=ON -DENABLE_EXAMPLES=ON ..
+          sudo make install
 
   macos:
     name: macOS
