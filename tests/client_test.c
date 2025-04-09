@@ -407,6 +407,15 @@ static void test_format_commands(void) {
     len = valkeyFormatCommand(&cmd, "%-");
     test_cond(len == -1);
 
+    /* Verify fix for CVE-2025-29479 */
+    test("Format command with invalid %%b format (string and length missing): ");
+    len = valkeyFormatCommand(&cmd, "5~%b4%");
+    test_cond(len == -1);
+
+    test("Format command with invalid %%s format (string missing): ");
+    len = valkeyFormatCommand(&cmd, "%s");
+    test_cond(len == -1);
+
     const char *argv[3];
     argv[0] = "SET";
     argv[1] = "foo\0xxx";
