@@ -18,6 +18,18 @@ TEST_BINS = $(patsubst $(TEST_DIR)/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 SOURCES = $(filter-out $(SRC_DIR)/tls.c $(SRC_DIR)/rdma.c, $(wildcard $(SRC_DIR)/*.c))
 HEADERS = $(filter-out $(INCLUDE_DIR)/tls.h $(INCLUDE_DIR)/rdma.h, $(wildcard $(INCLUDE_DIR)/*.h))
 
+# Allow the libvalkey provided sds and dict types to be replaced by
+# compatible implementations (like Valkey's).
+# A replaced type is not included in a built archive or shared library.
+SDS_INCLUDE_DIR ?= $(SRC_DIR)
+DICT_INCLUDE_DIR ?= $(SRC_DIR)
+ifneq ($(SDS_INCLUDE_DIR),$(SRC_DIR))
+  SOURCES := $(filter-out $(SRC_DIR)/sds.c, $(SOURCES))
+endif
+ifneq ($(DICT_INCLUDE_DIR),$(SRC_DIR))
+  SOURCES := $(filter-out $(SRC_DIR)/dict.c, $(SOURCES))
+endif
+
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SOURCES))
 
 LIBNAME=libvalkey
@@ -126,10 +138,9 @@ RDMA_DYLIB_MAKE_CMD=$(CC) $(OPTIMIZATION) $(PLATFORM_FLAGS) -shared -Wl,-soname,
 USE_RDMA?=0
 
 ifeq ($(USE_RDMA),1)
-  RDMA_SOURCES = $(wildcard $(SRC_DIR)/*rdma.c)
-  RDMA_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(RDMA_SOURCES))
-
-  RDMA_LDFLAGS+=-lrdmacm -libverbs
+  RDMA_SOURCES=$(SRC_DIR)/rdma.c
+  RDMA_OBJS=$(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(RDMA_SOURCES))
+  RDMA_LDFLAGS=-lrdmacm -libverbs
   # This is required for test.c only
   CFLAGS+=-DVALKEY_TEST_RDMA
   RDMA_STLIB=$(RDMA_STLIBNAME)
@@ -217,10 +228,10 @@ $(RDMA_STLIBNAME): $(RDMA_OBJS)
 	$(STLIB_MAKE_CMD) $(RDMA_STLIBNAME) $(RDMA_OBJS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
-	$(CC) -std=c99 -pedantic $(REAL_CFLAGS) -I$(INCLUDE_DIR) -MMD -MP -c $< -o $@
+	$(CC) -std=c99 -pedantic $(REAL_CFLAGS) -I$(INCLUDE_DIR) -I$(SDS_INCLUDE_DIR) -I$(DICT_INCLUDE_DIR) -MMD -MP -c $< -o $@
 
 $(OBJ_DIR)/%.o: $(TEST_DIR)/%.c | $(OBJ_DIR)
-	$(CC) -std=c99 -pedantic $(REAL_CFLAGS) -I$(INCLUDE_DIR) -I$(SRC_DIR) -MMD -MP -c $< -o $@
+	$(CC) -std=c99 -pedantic $(REAL_CFLAGS) -I$(INCLUDE_DIR) -I$(SDS_INCLUDE_DIR) -I$(DICT_INCLUDE_DIR) -I$(SRC_DIR) -MMD -MP -c $< -o $@
 
 $(TEST_DIR)/%: $(OBJ_DIR)/%.o $(STLIBNAME)
 	$(CC) -o $@ $< $(RDMA_STLIB) $(STLIBNAME) $(TLS_STLIB) $(LDFLAGS) $(TEST_LDFLAGS)
@@ -282,7 +293,7 @@ $(RDMA_PKGCONFNAME): $(RDMA_PKGCONF_TEMPLATE)
 		-e 's|@PROJECT_VERSION@|$(LIBVALKEY_SONAME)|g' \
 		$< > $@
 
-install: $(DYLIBNAME) $(STLIBNAME) $(PKGCONFNAME) $(TLS_INSTALL)
+install: $(DYLIBNAME) $(STLIBNAME) $(PKGCONFNAME) $(TLS_INSTALL) $(RDMA_INSTALL)
 	mkdir -p $(INSTALL_INCLUDE_PATH)/adapters $(INSTALL_LIBRARY_PATH)
 	$(INSTALL) $(HEADERS) $(INSTALL_INCLUDE_PATH)
 	$(INSTALL) $(INCLUDE_DIR)/adapters/*.h $(INSTALL_INCLUDE_PATH)/adapters

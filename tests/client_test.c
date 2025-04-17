@@ -1,6 +1,7 @@
 #include "fmacros.h"
 
 #include "sockcompat.h"
+#include "vkutil.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,9 +16,10 @@
 #endif
 #include "adapters/poll.h"
 #include "async.h"
-#include "sds.h"
 #include "valkey.h"
 #include "valkey_private.h"
+
+#include <sds.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -39,6 +41,7 @@
 enum connection_type {
     CONN_TCP,
     CONN_TCP_CLUSTER,
+    CONN_MPTCP,
     CONN_UNIX,
     CONN_FD,
     CONN_TLS,
@@ -272,6 +275,10 @@ static valkeyContext *do_connect(struct config config) {
         c = valkeyConnect(config.tcp.host, config.tcp.port);
     } else if (config.type == CONN_TCP_CLUSTER) {
         c = valkeyConnect(config.tcp_cluster.host, config.tcp_cluster.port);
+    } else if (config.type == CONN_MPTCP) {
+        valkeyOptions options = {0};
+        VALKEY_OPTIONS_SET_MPTCP(&options, config.tcp.host, config.tcp.port);
+        c = valkeyConnectWithOptions(&options);
     } else if (config.type == CONN_TLS) {
         c = valkeyConnect(config.tls.host, config.tls.port);
     } else if (config.type == CONN_UNIX) {
@@ -411,6 +418,14 @@ static void test_format_commands(void) {
 
     test("Format command with invalid printf format (specifier missing): ");
     len = valkeyFormatCommand(&cmd, "%-");
+    test_cond(len == -1);
+
+    test("Format command with %%b and an invalid string (NULL string): ");
+    len = valkeyFormatCommand(&cmd, "%b", NULL, 45);
+    test_cond(len == -1);
+
+    test("Format command with %%s and an invalid string (NULL string): ");
+    len = valkeyFormatCommand(&cmd, "%s", NULL);
     test_cond(len == -1);
 
     const char *argv[3];
@@ -1479,6 +1494,11 @@ static void test_invalid_timeout_errors(struct config config) {
 
     if (config.type == CONN_TCP || config.type == CONN_TLS) {
         c = valkeyConnectWithTimeout(config.tcp.host, config.tcp.port, config.connect_timeout);
+    } else if (config.type == CONN_MPTCP) {
+        valkeyOptions options = {0};
+        VALKEY_OPTIONS_SET_MPTCP(&options, config.tcp.host, config.tcp.port);
+        options.connect_timeout = &config.connect_timeout;
+        c = valkeyConnectWithOptions(&options);
     } else if (config.type == CONN_UNIX) {
         c = valkeyConnectUnixWithTimeout(config.unix_sock.path, config.connect_timeout);
 #ifdef VALKEY_TEST_RDMA
@@ -1502,6 +1522,11 @@ static void test_invalid_timeout_errors(struct config config) {
 
     if (config.type == CONN_TCP || config.type == CONN_TLS) {
         c = valkeyConnectWithTimeout(config.tcp.host, config.tcp.port, config.connect_timeout);
+    } else if (config.type == CONN_MPTCP) {
+        valkeyOptions options = {0};
+        VALKEY_OPTIONS_SET_MPTCP(&options, config.tcp.host, config.tcp.port);
+        options.connect_timeout = &config.connect_timeout;
+        c = valkeyConnectWithOptions(&options);
     } else if (config.type == CONN_UNIX) {
         c = valkeyConnectUnixWithTimeout(config.unix_sock.path, config.connect_timeout);
 #ifdef VALKEY_TEST_RDMA
@@ -2355,9 +2380,10 @@ struct _astest {
     int disconnect_status;
     int connected;
     int err;
-    char errstr[256];
+    char errstr[128];
 };
 static struct _astest astest;
+vk_static_assert(sizeof(astest.errstr) == sizeof(((valkeyContext){0}).errstr));
 
 /* async callbacks */
 static void asCleanup(void *data) {
@@ -2372,7 +2398,7 @@ static void connectCallback(valkeyAsyncContext *c, int status) {
     assert(t == &astest);
     assert(t->connects == 0);
     t->err = c->err;
-    strcpy(t->errstr, c->errstr);
+    memcpy(t->errstr, c->errstr, sizeof(t->errstr));
     t->connects++;
     t->connect_status = status;
     t->connected = status == VALKEY_OK ? 1 : -1;
@@ -2388,7 +2414,7 @@ static void disconnectCallback(const valkeyAsyncContext *c, int status) {
     assert(c->data == (void *)&astest);
     assert(astest.disconnects == 0);
     astest.err = c->err;
-    strcpy(astest.errstr, c->errstr);
+    memcpy(astest.errstr, c->errstr, sizeof(astest.errstr));
     astest.disconnects++;
     astest.disconnect_status = status;
     astest.connected = 0;
@@ -2400,7 +2426,7 @@ static void commandCallback(struct valkeyAsyncContext *ac, void *_reply, void *_
     assert(t == &astest);
     (void)_privdata;
     t->err = ac->err;
-    strcpy(t->errstr, ac->errstr);
+    memcpy(t->errstr, ac->errstr, sizeof(t->errstr));
     t->counter++;
     if (t->testno == ASTEST_PINGPONG || t->testno == ASTEST_ISSUE_931_PING) {
         assert(reply != NULL && reply->type == VALKEY_REPLY_STATUS && strcmp(reply->str, "PONG") == 0);
@@ -2431,6 +2457,10 @@ static valkeyAsyncContext *do_aconnect(struct config config, astest_no testno) {
         options.type = VALKEY_CONN_TCP;
         options.connect_timeout = &config.connect_timeout;
         VALKEY_OPTIONS_SET_TCP(&options, config.tcp.host, config.tcp.port);
+    } else if (config.type == CONN_MPTCP) {
+        options.type = VALKEY_CONN_TCP;
+        options.connect_timeout = &config.connect_timeout;
+        VALKEY_OPTIONS_SET_MPTCP(&options, config.tcp.host, config.tcp.port);
     } else if (config.type == CONN_TLS) {
         options.type = VALKEY_CONN_TCP;
         options.connect_timeout = &config.connect_timeout;
@@ -2701,6 +2731,19 @@ int main(int argc, char **argv) {
     if (throughput)
         test_throughput(cfg);
 
+#ifdef IPPROTO_MPTCP
+    printf("\nTesting against MPTCP connection (%s:%d):\n", cfg.tcp.host, cfg.tcp.port);
+    cfg.type = CONN_MPTCP;
+    test_blocking_connection(cfg);
+    test_blocking_connection_timeouts(cfg);
+    test_blocking_io_errors(cfg);
+    test_invalid_timeout_errors(cfg);
+    test_append_formatted_commands(cfg);
+    test_tcp_options(cfg);
+    if (throughput)
+        test_throughput(cfg);
+#endif
+
     printf("\nTesting against Unix socket connection (%s): ", cfg.unix_sock.path);
     if (test_unix_socket) {
         printf("\n");
@@ -2777,11 +2820,35 @@ int main(int argc, char **argv) {
     if (enable_cluster_tests) {
         sharded_pubsub_test(cfg);
     }
+
+#ifdef IPPROTO_MPTCP
+    cfg.type = CONN_MPTCP;
+    printf("\nTesting asynchronous API against MPTCP connection (%s:%d):\n", cfg.tcp.host, cfg.tcp.port);
+    cfg.type = CONN_MPTCP;
+
+    c = do_connect(cfg);
+    get_server_version(c, &major, NULL);
+    disconnect(c, 0);
+
+    test_pubsub_handling(cfg);
+    test_pubsub_multiple_channels(cfg);
+    test_monitor(cfg);
+    if (major >= 6) {
+        test_pubsub_handling_resp3(cfg);
+        test_command_timeout_during_pubsub(cfg);
+    }
+#endif /* IPPROTO_MPTCP */
+
 #endif /* VALKEY_TEST_ASYNC */
 
     cfg.type = CONN_TCP;
     printf("\nTesting asynchronous API using polling_adapter TCP (%s:%d):\n", cfg.tcp.host, cfg.tcp.port);
     test_async_polling(cfg);
+#ifdef IPPROTO_MPTCP
+    cfg.type = CONN_MPTCP;
+    printf("\nTesting asynchronous API using polling_adapter MPTCP (%s:%d):\n", cfg.tcp.host, cfg.tcp.port);
+    test_async_polling(cfg);
+#endif /* IPPROTO_MPTCP */
     if (test_unix_socket) {
         cfg.type = CONN_UNIX;
         printf("\nTesting asynchronous API using polling_adapter UNIX (%s):\n", cfg.unix_sock.path);

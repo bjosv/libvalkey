@@ -37,8 +37,9 @@
 #include "valkey.h"
 
 #include "net.h"
-#include "sds.h"
 #include "valkey_private.h"
+
+#include <sds.h>
 
 #include <assert.h>
 #include <ctype.h>
@@ -370,12 +371,16 @@ int valkeyvFormatCommand(char **target, const char *format, va_list ap) {
             switch (c[1]) {
             case 's':
                 arg = va_arg(ap, char *);
+                if (arg == NULL)
+                    goto format_err;
                 size = strlen(arg);
                 if (size > 0)
                     newarg = sdscatlen(curarg, arg, size);
                 break;
             case 'b':
                 arg = va_arg(ap, char *);
+                if (arg == NULL)
+                    goto format_err;
                 size = va_arg(ap, size_t);
                 if (size > 0)
                     newarg = sdscatlen(curarg, arg, size);
@@ -772,11 +777,11 @@ int valkeyReconnect(valkeyContext *c) {
     c->err = 0;
     memset(c->errstr, '\0', strlen(c->errstr));
 
-    if (c->funcs && c->funcs->close) {
+    assert(c->funcs);
+    if (c->funcs && c->funcs->close)
         c->funcs->close(c);
-    }
 
-    if (c->privctx && c->funcs->free_privctx) {
+    if (c->privctx && c->funcs && c->funcs->free_privctx) {
         c->funcs->free_privctx(c->privctx);
         c->privctx = NULL;
     }
@@ -810,11 +815,13 @@ int valkeyReconnect(valkeyContext *c) {
         return VALKEY_ERR;
     }
 
-    if (c->funcs->connect(c, &options) != VALKEY_OK) {
+    if (c->funcs && c->funcs->connect &&
+        c->funcs->connect(c, &options) != VALKEY_OK) {
         return VALKEY_ERR;
     }
 
-    if (c->command_timeout != NULL && (c->flags & VALKEY_BLOCK) && c->fd != VALKEY_INVALID_FD) {
+    if (c->command_timeout != NULL && (c->flags & VALKEY_BLOCK) &&
+        c->fd != VALKEY_INVALID_FD && c->funcs && c->funcs->set_timeout) {
         c->funcs->set_timeout(c, *c->command_timeout);
     }
 
@@ -851,6 +858,14 @@ valkeyContext *valkeyConnectWithOptions(const valkeyOptions *options) {
         c->flags |= VALKEY_PREFER_IPV6;
     }
 
+    if (options->options & VALKEY_OPT_MPTCP) {
+        if (!valkeyHasMptcp()) {
+            valkeySetError(c, VALKEY_ERR_PROTOCOL, "MPTCP is not supported on this platform");
+            return c;
+        }
+        c->flags |= VALKEY_MPTCP;
+    }
+
     /* Set any user supplied RESP3 PUSH handler or use freeReplyObject
      * as a default unless specifically flagged that we don't want one. */
     if (options->push_cb != NULL)
@@ -860,6 +875,9 @@ valkeyContext *valkeyConnectWithOptions(const valkeyOptions *options) {
 
     c->privdata = options->privdata;
     c->free_privdata = options->free_privdata;
+    c->connection_type = options->type;
+    /* Make sure we set a valkeyContextFuncs before returning any context. */
+    valkeyContextSetFuncs(c);
 
     if (valkeyContextUpdateConnectTimeout(c, options->connect_timeout) != VALKEY_OK ||
         valkeyContextUpdateCommandTimeout(c, options->command_timeout) != VALKEY_OK) {
@@ -867,8 +885,6 @@ valkeyContext *valkeyConnectWithOptions(const valkeyOptions *options) {
         return c;
     }
 
-    c->connection_type = options->type;
-    valkeyContextSetFuncs(c);
     c->funcs->connect(c, options);
     if (c->err == 0 && c->fd != VALKEY_INVALID_FD &&
         options->command_timeout != NULL && (c->flags & VALKEY_BLOCK)) {
@@ -1030,8 +1046,10 @@ int valkeyBufferWrite(valkeyContext *c, int *done) {
                 if (c->obuf == NULL)
                     goto oom;
             } else {
-                if (sdsrange(c->obuf, nwritten, -1) < 0)
+                /* No length check in Valkeys sdsrange() */
+                if (sdslen(c->obuf) > SSIZE_MAX)
                     goto oom;
+                sdsrange(c->obuf, nwritten, -1);
             }
         }
     }
