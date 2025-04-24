@@ -841,6 +841,8 @@ void valkeySsubscribeCallback(struct valkeyAsyncContext *ac, void *reply, void *
     valkeyCallback *cb = NULL;
     dictEntry *de;
 
+    assert(0);
+
     assert(data != NULL);
     assert(data->command != NULL);
     assert(r != NULL);
