@@ -221,15 +221,18 @@ jobs:
       - name: Build using CMake
         run: |
           mkdir build && cd build
-          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_TLS=ON
-          ninja -v
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_TLS=ON
+          VERBOSE=1 make DESTDIR=${{ github.workspace }}/cmake-install install
           ls -la
           otool -L ./libvalkey.dylib
+          ls -la ${{ github.workspace }}/cmake-install/usr/local/lib/
       - name: Build using Makefile
         run: |
           USE_TLS=1 make
           ls -la
           otool -L ./lib/libvalkey.dylib
+          USE_TLS=1 DESTDIR=${{ github.workspace }}/make-install make install
+          ls -la ${{ github.workspace }}/make-install/usr/local/lib/
       - name: Run tests
         working-directory: tests
         env:
