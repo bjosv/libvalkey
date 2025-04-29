@@ -244,6 +244,11 @@ jobs:
           mkdir build && cd build
           cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
           ninja -v
+      - name: Install
+        run: |
+          cd build
+          ninja -v install
+          ls
       - name: Run tests
         working-directory: build
         run: .\tests\client_test.exe
