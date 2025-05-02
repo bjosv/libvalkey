@@ -1,6 +1,7 @@
 name: CodeQL
 
 on:
+  push:           # TEMPORARY
   pull_request:
   schedule:
     # Run weekly, new vulnerabilities might be added to the database.
@@ -13,7 +14,7 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || github.repository == 'valkey-io/libvalkey'
+#    if: github.event_name == 'pull_request' || github.repository == 'valkey-io/libvalkey'
     permissions:
       security-events: write
     steps:
