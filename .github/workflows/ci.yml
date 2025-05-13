@@ -238,19 +238,26 @@ jobs:
         run: |
           choco install -y memurai-developer openssl
           # Workaround for libevent that specify minimum CMake version 3.1 (incompatible with CMake >= 4.0).
-          sed -i '2i if(CMAKE_VERSION VERSION_GREATER_EQUAL "4.0")' ${env:VCPKG_INSTALLATION_ROOT}/scripts/ports.cmake
-          sed -i '3i   set(ENV{CMAKE_POLICY_VERSION_MINIMUM} 3.5)'  ${env:VCPKG_INSTALLATION_ROOT}/scripts/ports.cmake
-          sed -i '4i endif()'                                       ${env:VCPKG_INSTALLATION_ROOT}/scripts/ports.cmake
+          #sed -i '2i if(CMAKE_VERSION VERSION_GREATER_EQUAL "4.0")' ${env:VCPKG_INSTALLATION_ROOT}/scripts/ports.cmake
+          #sed -i '3i   set(ENV{CMAKE_POLICY_VERSION_MINIMUM} 3.5)'  ${env:VCPKG_INSTALLATION_ROOT}/scripts/ports.cmake
+          #sed -i '4i endif()'                                       ${env:VCPKG_INSTALLATION_ROOT}/scripts/ports.cmake
           vcpkg install --triplet x64-windows pkgconf libevent
 
-      - name: Build
+      - name: Build shared
         run: |
-          mkdir build && cd build
+          mkdir build-shared && cd build-shared
           cmake .. -G Ninja -DENABLE_TLS=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
-          ninja -v
+          ninja -v install
       - name: Run tests
-        working-directory: build
+        working-directory: build-shared
         run: .\tests\client_test.exe
+      - name: Build debug
+        run: |
+          mkdir build-debug && cd build-debug
+          cmake .. -G Ninja -DENABLE_TLS=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
+          ninja -v
+          dir
+          ninja -v install
 
   windows-cygwin:
     name: Windows (Cygwin)
