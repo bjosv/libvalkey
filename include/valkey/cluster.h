@@ -73,12 +73,6 @@ typedef struct valkeyClusterNode {
     struct hilist *replicas;
 } valkeyClusterNode;
 
-typedef struct cluster_slot {
-    uint32_t start;
-    uint32_t end;
-    valkeyClusterNode *node; /* Owner of slot region. */
-} cluster_slot;
-
 /* Context for accessing a Valkey Cluster */
 typedef struct valkeyClusterContext {
     int err;          /* Error flags, 0 when there is no error */

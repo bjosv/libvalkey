@@ -89,6 +89,12 @@ vk_static_assert(VALKEY_OPT_USE_CLUSTER_NODES > VALKEY_OPT_LAST_SA_OPTION);
 #define SLOTMAP_UPDATE_THROTTLE_USEC 1000000
 #define SLOTMAP_UPDATE_ONGOING INT64_MAX
 
+typedef struct cluster_slot {
+    uint32_t start;
+    uint32_t end;
+    valkeyClusterNode *node; /* Owner of slot region. */
+} cluster_slot;
+
 typedef struct cluster_async_data {
     valkeyClusterAsyncContext *acc;
     struct cmd *command;
