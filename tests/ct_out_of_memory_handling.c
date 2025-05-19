@@ -94,7 +94,7 @@ valkeyClusterNode *getNodeByPort(valkeyClusterContext *cc, int port) {
     valkeyClusterInitNodeIterator(&ni, cc);
     valkeyClusterNode *node;
     while ((node = valkeyClusterNodeNext(&ni)) != NULL) {
-        if (node->port == port)
+        if (valkeyClusterNodeGetPort(node) == port)
             return node;
     }
     assert(0);
@@ -279,7 +279,7 @@ void test_alloc_failure_handling(void) {
         /* Get the source information for the migration. */
         unsigned int slot = valkeyClusterGetSlotByKey((char *)"foo");
         valkeyClusterNode *srcNode = valkeyClusterGetNodeByKey(cc, (char *)"foo");
-        int srcPort = srcNode->port;
+        int srcPort = valkeyClusterNodeGetPort(srcNode);
 
         /* Get a destination node to migrate the slot to. */
         valkeyClusterNode *dstNode;
@@ -290,7 +290,7 @@ void test_alloc_failure_handling(void) {
                 break;
         }
         assert(dstNode && dstNode != srcNode);
-        int dstPort = dstNode->port;
+        int dstPort = valkeyClusterNodeGetPort(dstNode);
 
         valkeyReply *reply, *replySrcId, *replyDstId;
 

@@ -89,6 +89,21 @@ vk_static_assert(VALKEY_OPT_USE_CLUSTER_NODES > VALKEY_OPT_LAST_SA_OPTION);
 #define SLOTMAP_UPDATE_THROTTLE_USEC 1000000
 #define SLOTMAP_UPDATE_ONGOING INT64_MAX
 
+struct valkeyClusterNode {
+    char *name;
+    char *addr;
+    char *host;
+    uint16_t port;
+    uint8_t role;
+    uint8_t pad;
+    int failure_count; /* consecutive failing attempts in async */
+    valkeyContext *con;
+    valkeyAsyncContext *acon;
+    int64_t lastConnectionAttempt; /* Timestamp */
+    struct hilist *slots;
+    struct hilist *replicas;
+};
+
 typedef struct cluster_slot {
     uint32_t start;
     uint32_t end;
@@ -3483,4 +3498,19 @@ unsigned int valkeyClusterGetSlotByKey(char *key) {
 valkeyClusterNode *valkeyClusterGetNodeByKey(valkeyClusterContext *cc,
                                              char *key) {
     return node_get_by_table(cc, keyHashSlot(key, strlen(key)));
+}
+
+/* Get the Node ID for a given cluster node. */
+char *valkeyClusterNodeGetID(valkeyClusterNode *node) {
+    return node->name;
+}
+
+/* Get the host (IP or hostname) that a given cluster node uses. */
+char *valkeyClusterNodeGetHost(valkeyClusterNode *node) {
+    return node->host;
+}
+
+/* Get the port that a given cluster node uses. */
+uint16_t valkeyClusterNodeGetPort(valkeyClusterNode *node) {
+    return node->port;
 }

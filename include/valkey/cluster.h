@@ -58,20 +58,13 @@ struct valkeyTLSContext;
 
 typedef void(valkeyClusterCallbackFn)(struct valkeyClusterAsyncContext *,
                                       void *, void *);
-typedef struct valkeyClusterNode {
-    char *name;
-    char *addr;
-    char *host;
-    uint16_t port;
-    uint8_t role;
-    uint8_t pad;
-    int failure_count; /* consecutive failing attempts in async */
-    valkeyContext *con;
-    valkeyAsyncContext *acon;
-    int64_t lastConnectionAttempt; /* Timestamp */
-    struct hilist *slots;
-    struct hilist *replicas;
-} valkeyClusterNode;
+
+/* --- Opaque types --- */
+typedef struct valkeyClusterNode valkeyClusterNode;
+
+/* Types that can be stack allocated. */
+/* 72 bytes needed when using Valkey's dict. */
+typedef uint64_t valkeyClusterNodeIterator[9];
 
 /* Context for accessing a Valkey Cluster */
 typedef struct valkeyClusterContext {
@@ -130,11 +123,6 @@ typedef struct valkeyClusterAsyncContext {
     valkeyConnectCallback *onConnect;
 
 } valkeyClusterAsyncContext;
-
-/* --- Opaque types --- */
-
-/* 72 bytes needed when using Valkey's dict. */
-typedef uint64_t valkeyClusterNodeIterator[9];
 
 /* --- Configuration options --- */
 
@@ -327,6 +315,10 @@ valkeyClusterNode *valkeyClusterNodeNext(valkeyClusterNodeIterator *iter);
 unsigned int valkeyClusterGetSlotByKey(char *key);
 valkeyClusterNode *valkeyClusterGetNodeByKey(valkeyClusterContext *cc,
                                              char *key);
+/* Cluster node accessors */
+char *valkeyClusterNodeGetID(valkeyClusterNode *node);
+char *valkeyClusterNodeGetHost(valkeyClusterNode *node);
+uint16_t valkeyClusterNodeGetPort(valkeyClusterNode *node);
 
 #ifdef __cplusplus
 }
