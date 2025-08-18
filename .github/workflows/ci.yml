@@ -24,7 +24,7 @@ jobs:
       matrix:
         include:
           # New compilers
-          - compiler: 'clang-20'
+          - compiler: 'clang-21'
             cmake-version: '4.0'
             cmake-build-type: Release
           - compiler: 'gcc-14'
@@ -75,6 +75,42 @@ jobs:
         time: '20s'
     - name: Run tests
       working-directory: build
+      run: make test
+    - name: Teardown clusters
+      working-directory: build
+      run: make stop
+
+  gcc-15:
+    name: GCC 15
+    runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:25.04 # Provides gcc-15
+    steps:
+    - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+    - name: Prepare
+      run: |
+        apt update && apt-get install -y libevent-dev libuv1-dev libev-dev libglib2.0-dev valkey-server gcc-15 g++-15 cmake
+    - name: Generate makefiles
+      run: |
+        cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DENABLE_TLS=OFF -DENABLE_IPV6_TESTS=OFF
+    - name: Build
+      working-directory: build
+      env:
+        CC: gcc-15
+        CXX: g++-15
+      run: VERBOSE=1 make
+    - name: Setup clusters
+      working-directory: build
+      run: make start
+    - name: Wait for clusters to start..
+      uses: kibertoad/wait-action@99f6f101c5be7b88bb9b41c0d3b810722491b8e5 # 1.0.1
+      with:
+        time: '20s'
+    - name: Run tests
+      working-directory: build
+      env:
+        CC: gcc-15
+        CXX: g++-15
       run: make test
     - name: Teardown clusters
       working-directory: build
