@@ -124,7 +124,7 @@ static inline int valkeyContextUpdateCommandTimeout(valkeyContext *c,
     return VALKEY_OK;
 }
 
-int valkeyContextRegisterFuncs(valkeyContextFuncs *funcs, enum valkeyConnectionType type);
+LIBVALKEY_API int valkeyContextRegisterFuncs(valkeyContextFuncs *funcs, enum valkeyConnectionType type);
 void valkeyContextRegisterTcpFuncs(void);
 void valkeyContextRegisterUnixFuncs(void);
 void valkeyContextRegisterUserfdFuncs(void);
