@@ -201,7 +201,7 @@ else ifeq ($(uname_S),Darwin)
   TLS_DYLIB_PATCH_NAME=$(TLS_LIBNAME).$(LIBVALKEY_MAJOR).$(LIBVALKEY_MINOR).$(LIBVALKEY_PATCH).$(DYLIBSUFFIX)
   TLS_DYLIB_MAJOR_NAME=$(TLS_LIBNAME).$(LIBVALKEY_MAJOR).$(DYLIBSUFFIX)
   TLS_DYLIB_MAKE_CMD=$(CC) -dynamiclib -Wl,-install_name,$(PREFIX)/$(LIBRARY_PATH)/$(TLS_DYLIB_PATCH_NAME) -o $(TLS_DYLIBNAME) $(LDFLAGS) $(TLS_LDFLAGS)
-  DYLIB_PLUGIN=-Wl,-undefined -Wl,dynamic_lookup
+  # DYLIB_PLUGIN=-Wl,-undefined -Wl,dynamic_lookup
 endif
 
 all: dynamic static pkgconfig tests
