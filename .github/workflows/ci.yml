@@ -92,11 +92,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      # - name: Prepare
+      #   uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05 # v1.6.0
+      #   with:
+      #     packages: libevent-dev valgrind valkey-server
+      #     version: 1.0
       - name: Prepare
-        uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05 # v1.6.0
-        with:
-          packages: libevent-dev valgrind valkey-server
-          version: 1.0
+        run: |
+          sudo apt update
+          sudo apt install -y libevent-dev valgrind valkey-server
       - name: Build
         run: USE_TLS=1 TEST_ASYNC=1 make -j$(nproc)
       - name: Run tests
