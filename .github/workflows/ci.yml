@@ -240,14 +240,28 @@ jobs:
       - name: Install dependencies
         run: |
           brew update
-          brew install valkey
+          brew install llvm valkey
       - name: Build and install using CMake
         run: |
+          # If you need to have llvm first in your PATH, run:
+          # echo 'export PATH="/opt/homebrew/opt/llvm/bin:$PATH"' >> /Users/runner/.bash_profile
+          # For compilers to find llvm you may need to set:
+          # export LDFLAGS="-L/opt/homebrew/opt/llvm/lib"
+          # export CPPFLAGS="-I/opt/homebrew/opt/llvm/include"
+          # For cmake to find llvm you may need to set:
+          # export CMAKE_PREFIX_PATH="/opt/homebrew/opt/llvm"
+
+          export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+          export CC=/opt/homebrew/opt/llvm/bin/clang
+
           mkdir build && cd build
           cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_TLS=ON -DENABLE_EXAMPLES=ON
           sudo ninja -v install
       - name: Build using Makefile
-        run: USE_TLS=1 make
+        run: |
+          export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+          export CC=/opt/homebrew/opt/llvm/bin/clang
+          USE_TLS=1 make
       - name: Run tests
         working-directory: tests
         env:
