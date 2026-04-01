@@ -44,6 +44,7 @@ jobs:
         run: |
           CodeChecker analyze build/compile_commands.json \
             --analyzers clangsa \
+            --verbose debug \
             --output ./reports
 
       - name: Run CodeChecker CTU analyze
