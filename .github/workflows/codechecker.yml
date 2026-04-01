@@ -1,0 +1,71 @@
+name: CodeChecker Analysis
+
+on:
+  push:
+#    branches: [main]
+  pull_request:
+#    branches: [main]
+
+env:
+  LLVM_VERSION: 22
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-pip wget lsb-release software-properties-common gnupg
+          wget https://apt.llvm.org/llvm.sh -O /tmp/llvm.sh
+          # Temporary fix to install clang-22
+          sed -i 's/LLVM_VERSION_PATTERNS\[22\]=\"\"/LLVM_VERSION_PATTERNS[22]=\"-22\"/' /tmp/llvm.sh
+          sudo bash /tmp/llvm.sh ${{ env.LLVM_VERSION }}
+          pip3 install --break-system-packages codechecker
+
+      - name: Build with compile commands
+        env:
+          CC: clang-${{ env.LLVM_VERSION }}
+          CXX: clang++-${{ env.LLVM_VERSION }}
+        run: |
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
+
+      - name: Restore analysis cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ./reports
+          key: codechecker-${{ hashFiles('src/**', 'include/**') }}
+          restore-keys: codechecker-
+
+      - name: Run CodeChecker analyze
+        run: |
+          CodeChecker analyze build/compile_commands.json \
+            --analyzers clangsa \
+            --output ./reports
+
+      - name: Run CodeChecker CTU analyze
+        run: |
+          CodeChecker analyze build/compile_commands.json \
+            --analyzers clangsa \
+            --ctu-all \
+            --output ./reports-ctu
+
+      - name: Parse results
+        run: CodeChecker parse ./reports ./reports-ctu
+
+      - name: Generate HTML report
+        if: failure()
+        run: |
+          CodeChecker parse ./reports ./reports-ctu \
+            --export html \
+            --output ./reports-html
+
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: codechecker-report
+          path: ./reports-html
