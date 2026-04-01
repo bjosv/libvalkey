@@ -455,6 +455,7 @@ static void test_format_commands(void) {
     sds_cmd = NULL;
     test("Format command into sds by passing argc/argv without lengths: ");
     len = valkeyFormatSdsCommandArgv(&sds_cmd, argc, argv, NULL);
+    // codechecker_false_positive [core.NonNullParamChecker] sds_cmd is set by valkeyFormatSdsCommandArgv
     test_cond(strncmp(sds_cmd, "*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n", len) == 0 &&
               len == 4 + 4 + (3 + 2) + 4 + (3 + 2) + 4 + (3 + 2));
     sdsfree(sds_cmd);

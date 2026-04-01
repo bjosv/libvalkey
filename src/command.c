@@ -260,6 +260,7 @@ void valkey_parse_cmd(struct cmd *r) {
                 continue; /* Keyword can't appear in a position before 'startfrom' */
             if (!strncasecmp(keyword, arg, arglen)) {
                 /* Keyword found. Now the first key is the next arg. */
+                // codechecker_false_positive [deadcode.DeadStores] p is used in the NULL check
                 if ((p = valkey_parse_bulk(p, end, &arg, &arglen)) == NULL)
                     goto error;
                 /* Keep found key. */
@@ -289,6 +290,7 @@ void valkey_parse_cmd(struct cmd *r) {
         if (!strncmp("0", arg, arglen))
             goto done; /* No args. */
         /* One or more args. The first key is the arg after the 'numkeys' arg. */
+        // codechecker_false_positive [deadcode.DeadStores] p is used in the NULL check
         if ((p = valkey_parse_bulk(p, end, &arg, &arglen)) == NULL)
             goto error;
         argidx++;

@@ -973,6 +973,7 @@ static dict *parse_cluster_nodes(valkeyClusterContext *cc, valkeyContext *c, val
                 }
             }
             /* Retain parsed replica nodes until all primaries are parsed. */
+            // codechecker_false_positive [core.CallAndMessage] primary_id is always initialized via parsed_primary_id when role is replica
             if (retain_replica_node(replicas, primary_id, node) != VALKEY_OK) {
                 freeValkeyClusterNode(node);
                 goto oom;

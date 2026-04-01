@@ -103,6 +103,7 @@ static inline int valkeyContextUpdateConnectTimeout(valkeyContext *c,
             return VALKEY_ERR;
     }
 
+    // codechecker_false_positive [core.NonNullParamChecker] NULL is handled by pointer equality check above
     memcpy(c->connect_timeout, timeout, sizeof(*c->connect_timeout));
     return VALKEY_OK;
 }
@@ -120,6 +121,7 @@ static inline int valkeyContextUpdateCommandTimeout(valkeyContext *c,
             return VALKEY_ERR;
     }
 
+    // codechecker_false_positive [core.NonNullParamChecker] NULL is handled by pointer equality check above
     memcpy(c->command_timeout, timeout, sizeof(*c->command_timeout));
     return VALKEY_OK;
 }
