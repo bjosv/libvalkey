@@ -217,6 +217,39 @@ jobs:
         run: |
           sudo USE_RDMA=1 make install
 
+  cares:
+    name: c-ares support enabled
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Prepare
+        uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05 # v1.6.0
+        with:
+          packages: libc-ares-dev valkey-server
+          version: 1.0
+      - name: Build shared libraries using CMake
+        run: |
+          mkdir build-shared && cd build-shared
+          cmake -DENABLE_CARES=ON ..
+          make
+      - name: Run unit tests (shared)
+        working-directory: build-shared
+        run: ./tests/ut_dns
+      - name: Build static libraries using CMake
+        run: |
+          mkdir build-static && cd build-static
+          cmake -DBUILD_SHARED_LIBS=OFF -DENABLE_CARES=ON ..
+          make
+      - name: Run unit tests (static)
+        working-directory: build-static
+        run: ./tests/ut_dns
+      - name: Build using Makefile
+        run: |
+          make clean
+          USE_CARES=1 make -j$(nproc)
+      - name: Run unit tests (make)
+        run: ./tests/ut_dns
+
   cmake-minimum-required:
     name: CMake 3.7.0 (min. required)
     runs-on: ubuntu-latest

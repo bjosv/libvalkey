@@ -42,10 +42,13 @@ We support plain GNU make and CMake. Following is information on how to build th
 sudo make install
 
 # With all options
-sudo USE_TLS=1 USE_RDMA=1 make install
+sudo USE_TLS=1 USE_RDMA=1 USE_CARES=1 make install
 
 # If your openssl is in a non-default location
 sudo USE_TLS=1 OPENSSL_PREFIX=/path/to/openssl make install
+
+# If your c-ares is in a non-default location
+sudo USE_CARES=1 CARES_PREFIX=/path/to/c-ares make install
 ```
 
 ### Building with CMake
@@ -58,9 +61,9 @@ mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
 sudo make install
 
-# Build with TLS and RDMA support
+# Build with TLS, RDMA and c-ares support
 mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_TLS=1 -DENABLE_RDMA=1 ..
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_TLS=1 -DENABLE_RDMA=1 -DENABLE_CARES=1 ..
 sudo make install
 ```
 

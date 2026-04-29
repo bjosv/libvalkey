@@ -38,6 +38,7 @@
 #include "net.h"
 
 #include "async.h"
+#include "dns.h"
 #include "sockcompat.h"
 #include "valkey_private.h"
 
@@ -459,15 +460,20 @@ int valkeyContextConnectTcp(valkeyContext *c, const valkeyOptions *options) {
     else
         hints.ai_family = AF_INET;
 
-    rv = getaddrinfo(c->tcp.host, _port, &hints, &servinfo);
-    if (rv != 0 && hints.ai_family != AF_UNSPEC) {
-        /* Try again with the other IP version. */
-        hints.ai_family = (hints.ai_family == AF_INET) ? AF_INET6 : AF_INET;
-        rv = getaddrinfo(c->tcp.host, _port, &hints, &servinfo);
-    }
-    if (rv != 0) {
-        valkeySetError(c, VALKEY_ERR_OTHER, gai_strerror(rv));
-        return VALKEY_ERR;
+    {
+        const char *dns_err = NULL;
+        rv = valkeyDnsResolve(c->tcp.host, _port, &hints, timeout_msec,
+                              &servinfo, &dns_err);
+        if (rv != 0 && hints.ai_family != AF_UNSPEC) {
+            /* Try again with the other IP version. */
+            hints.ai_family = (hints.ai_family == AF_INET) ? AF_INET6 : AF_INET;
+            rv = valkeyDnsResolve(c->tcp.host, _port, &hints, timeout_msec,
+                                  &servinfo, &dns_err);
+        }
+        if (rv != 0) {
+            valkeySetError(c, VALKEY_ERR_OTHER, dns_err ? dns_err : "DNS resolution failed");
+            return VALKEY_ERR;
+        }
     }
     for (p = servinfo; p != NULL; p = p->ai_next) {
     addrretry:
@@ -480,19 +486,24 @@ int valkeyContextConnectTcp(valkeyContext *c, const valkeyOptions *options) {
             goto error;
         if (c->tcp.source_addr) {
             int bound = 0;
-            /* Using getaddrinfo saves us from self-determining IPv4 vs IPv6 */
-            if ((rv = getaddrinfo(c->tcp.source_addr, NULL, &hints, &bservinfo)) != 0) {
-                char buf[128];
-                snprintf(buf, sizeof(buf), "Can't get addr: %s", gai_strerror(rv));
-                valkeySetError(c, VALKEY_ERR_OTHER, buf);
-                goto error;
+            /* Using valkeyDnsResolve saves us from self-determining IPv4 vs IPv6 */
+            {
+                const char *bind_dns_err = NULL;
+                if ((rv = valkeyDnsResolve(c->tcp.source_addr, NULL, &hints, -1,
+                                           &bservinfo, &bind_dns_err)) != 0) {
+                    char buf[128];
+                    snprintf(buf, sizeof(buf), "Can't get addr: %s",
+                             bind_dns_err ? bind_dns_err : "DNS resolution failed");
+                    valkeySetError(c, VALKEY_ERR_OTHER, buf);
+                    goto error;
+                }
             }
 
             if (reuseaddr) {
                 n = 1;
                 if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *)&n,
                                sizeof(n)) < 0) {
-                    freeaddrinfo(bservinfo);
+                    valkeyFreeDnsResult(bservinfo);
                     goto error;
                 }
             }
@@ -503,7 +514,7 @@ int valkeyContextConnectTcp(valkeyContext *c, const valkeyOptions *options) {
                     break;
                 }
             }
-            freeaddrinfo(bservinfo);
+            valkeyFreeDnsResult(bservinfo);
             if (!bound) {
                 valkeySetErrorFromErrno(c, VALKEY_ERR_OTHER, "Can't bind socket");
                 goto error;
@@ -562,7 +573,7 @@ error:
     rv = VALKEY_ERR;
 end:
     if (servinfo) {
-        freeaddrinfo(servinfo);
+        valkeyFreeDnsResult(servinfo);
     }
 
     return rv; // Need to return VALKEY_OK if alright

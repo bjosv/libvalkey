@@ -12,7 +12,7 @@ TEST_DIR = tests
 
 INCLUDE_DIR = include/valkey
 
-TEST_SRCS = $(TEST_DIR)/client_test.c $(TEST_DIR)/ut_parse_cmd.c $(TEST_DIR)/ut_slotmap_update.c
+TEST_SRCS = $(TEST_DIR)/client_test.c $(TEST_DIR)/ut_parse_cmd.c $(TEST_DIR)/ut_slotmap_update.c $(TEST_DIR)/ut_dns.c
 TEST_BINS = $(patsubst $(TEST_DIR)/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
 SOURCES = $(filter-out $(SRC_DIR)/tls.c $(SRC_DIR)/rdma.c, $(wildcard $(SRC_DIR)/*.c))
@@ -189,6 +189,16 @@ ifeq ($(USE_THREADS),1)
   CFLAGS+=-DVALKEY_USE_THREADS
 endif
 
+USE_CARES?=0
+ifeq ($(USE_CARES),1)
+  CFLAGS+=-DUSE_CARES
+  ifdef CARES_PREFIX
+    CFLAGS+=-I$(CARES_PREFIX)/include
+    CARES_LDFLAGS+=-L$(CARES_PREFIX)/lib
+  endif
+  CARES_LDFLAGS+=-lcares
+endif
+
 PTHREAD_FLAGS :=
 
 ifeq ($(uname_S),Linux)
@@ -239,7 +249,7 @@ else ifeq ($(uname_S),Darwin)
     -Wl,-install_name,$(PREFIX)/$(LIBRARY_PATH)/$(TLS_DYLIB_PATCH_NAME)
 endif
 
-REAL_LDFLAGS += $(PTHREAD_FLAGS)
+REAL_LDFLAGS += $(PTHREAD_FLAGS) $(CARES_LDFLAGS)
 
 all: dynamic static pkgconfig tests
 

@@ -24,6 +24,7 @@ OPTION(ENABLE_EXAMPLES "Enable building valkey examples" OFF)
 option(ENABLE_IPV6_TESTS "Enable IPv6 tests requiring special prerequisites" OFF)
 OPTION(ENABLE_RDMA "Build valkey_rdma for RDMA support" OFF)
 OPTION(ENABLE_DLOPEN_RDMA "Build valkey_rdma with dynamic loading" OFF)
+OPTION(ENABLE_CARES "Build with c-ares for non-blocking DNS resolution" OFF)
 
 # Libvalkey requires C99 (-std=c99)
 SET(CMAKE_C_STANDARD 99)
@@ -47,6 +48,7 @@ set(valkey_sources
     src/conn.c
     src/crc16.c
     src/dict.c
+    src/dns.c
     src/net.c
     src/read.c
     src/sockcompat.c
@@ -89,6 +91,18 @@ if(ENABLE_THREADS)
     find_package(Threads REQUIRED)
     list(APPEND valkey_link_libraries Threads::Threads)
     list(APPEND valkey_compile_definitions VALKEY_USE_THREADS)
+endif()
+
+if(ENABLE_CARES)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(CARES REQUIRED libcares)
+    list(APPEND valkey_compile_definitions USE_CARES)
+    target_include_directories(valkey PRIVATE ${CARES_INCLUDE_DIRS})
+    if(BUILD_SHARED_LIBS)
+        list(APPEND valkey_link_libraries ${CARES_LIBRARIES})
+    else()
+        list(APPEND valkey_link_libraries ${CARES_STATIC_LIBRARIES})
+    endif()
 endif()
 
 if(valkey_link_libraries)

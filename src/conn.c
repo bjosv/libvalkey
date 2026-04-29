@@ -28,6 +28,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "dns.h"
 #include "valkey_private.h"
 
 #include <assert.h>
@@ -45,6 +46,7 @@
 #endif // VALKEY_USE_THREADS
 
 static void vkRegisterFuncs(void) {
+    valkeyDnsInit();
     valkeyContextRegisterTcpFuncs();
     valkeyContextRegisterUnixFuncs();
     valkeyContextRegisterUserfdFuncs();
