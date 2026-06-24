@@ -171,6 +171,8 @@ static void valkeyAsyncCopyError(valkeyAsyncContext *ac) {
     ac->errstr = c->errstr;
 }
 
+static int valkeyAsyncInitiateConnect(valkeyAsyncContext *ac);
+
 valkeyAsyncContext *valkeyAsyncConnectWithOptions(const valkeyOptions *options) {
     valkeyOptions myOptions = *options;
     valkeyContext *c;
@@ -182,6 +184,12 @@ valkeyAsyncContext *valkeyAsyncConnectWithOptions(const valkeyOptions *options) 
     myOptions.options |= VALKEY_OPT_NO_PUSH_AUTOFREE;
 
     myOptions.options |= VALKEY_OPT_NONBLOCK;
+
+    /* If an adapter is provided, defer connect so it can be initiated
+     * after context setup is complete. */
+    if (myOptions.attach_fn && myOptions.type == VALKEY_CONN_TCP)
+        myOptions.options |= VALKEY_OPT_DEFER_CONNECT;
+
     c = valkeyConnectWithOptions(&myOptions);
     if (c == NULL) {
         return NULL;
@@ -192,11 +200,34 @@ valkeyAsyncContext *valkeyAsyncConnectWithOptions(const valkeyOptions *options) 
         valkeyFree(c);
         return NULL;
     }
+    c = &ac->c; /* c was reallocated by valkeyAsyncInitialize */
 
     /* Set any configured async push handler */
     valkeyAsyncSetPushCallback(ac, myOptions.async_push_cb);
 
-    valkeyAsyncCopyError(ac);
+    /* Attach adapter and initiate connect if adapter was provided. */
+    if (myOptions.attach_fn) {
+        /* Connect first (blocking DNS), then attach. This works with all
+         * adapters since the fd is valid by the time attach runs. */
+        if (valkeyAsyncInitiateConnect(ac) != VALKEY_OK) {
+            valkeyAsyncCopyError(ac);
+            return ac;
+        }
+        /* Clear VALKEY_CONNECTED so the event loop goes through
+         * valkeyAsyncHandleConnect (sets TCP_NODELAY, fires callback). */
+        c->flags &= ~VALKEY_CONNECTED;
+
+        if (myOptions.attach_fn(ac, myOptions.attach_data) != VALKEY_OK) {
+            valkeyAsyncCopyError(ac);
+            return ac;
+        }
+        /* Register fd with event loop for connect completion. */
+        _EL_ADD_WRITE(ac);
+    } else {
+        /* Legacy path: no adapter provided, connect happened in valkeyConnectWithOptions. */
+        valkeyAsyncCopyError(ac);
+    }
+
     return ac;
 }
 
@@ -227,6 +258,41 @@ valkeyAsyncContext *valkeyAsyncConnectUnix(const char *path) {
     valkeyOptions options = {0};
     VALKEY_OPTIONS_SET_UNIX(&options, path);
     return valkeyAsyncConnectWithOptions(&options);
+}
+
+static int valkeyAsyncInitiateConnect(valkeyAsyncContext *ac) {
+    valkeyContext *c = &ac->c;
+
+    if (!(c->flags & VALKEY_CONNECT_PENDING))
+        return VALKEY_OK;
+
+    /* Clear the flag so the connect function proceeds fully this time. */
+    c->flags &= ~VALKEY_CONNECT_PENDING;
+
+    /* Re-build options from stored context state. */
+    valkeyOptions options = {0};
+    options.type = c->connection_type;
+    options.connect_timeout = c->connect_timeout;
+
+    switch (c->connection_type) {
+    case VALKEY_CONN_TCP:
+        options.endpoint.tcp.ip = c->tcp.host;
+        options.endpoint.tcp.port = c->tcp.port;
+        options.endpoint.tcp.source_addr = c->tcp.source_addr;
+        break;
+    case VALKEY_CONN_UNIX:
+        options.endpoint.unix_socket = c->unix_sock.path;
+        break;
+    default:
+        break;
+    }
+
+    c->funcs->connect(c, &options);
+    if (c->err) {
+        valkeyAsyncCopyError(ac);
+        return VALKEY_ERR;
+    }
+    return VALKEY_OK;
 }
 
 int valkeyAsyncSetConnectCallback(valkeyAsyncContext *ac, valkeyConnectCallback *fn) {
