@@ -103,6 +103,9 @@ typedef SSIZE_T ssize_t;
 /* Flag specific to use Multipath TCP (MPTCP) */
 #define VALKEY_MPTCP 0x2000
 
+/* Flag indicating connect is deferred (endpoint info stored, connect later). */
+#define VALKEY_CONNECT_PENDING 0x4000
+
 #define VALKEY_KEEPALIVE_INTERVAL 15 /* seconds */
 
 /* number of times we retry to connect in the case of EADDRNOTAVAIL and
@@ -173,7 +176,8 @@ enum valkeyConnectionType {
 #define VALKEY_OPT_PREFER_IPV6 0x40       /* Prefer IPv6 in DNS lookups. */
 #define VALKEY_OPT_PREFER_IP_UNSPEC (VALKEY_OPT_PREFER_IPV4 | VALKEY_OPT_PREFER_IPV6)
 #define VALKEY_OPT_MPTCP 0x80
-#define VALKEY_OPT_LAST_SA_OPTION 0x80 /* Last defined standalone option. */
+#define VALKEY_OPT_DEFER_CONNECT 0x100  /* Async internal option: defer DNS/connect. */
+#define VALKEY_OPT_LAST_SA_OPTION 0x100 /* Last defined standalone option. */
 
 /* In Unix systems a file descriptor is a regular signed int, with -1
  * representing an invalid descriptor. In Windows it is a SOCKET
@@ -226,6 +230,11 @@ typedef struct {
     /* A user defined PUSH message callback */
     valkeyPushFn *push_cb;
     valkeyAsyncPushFn *async_push_cb;
+
+    /* Optional event-loop adapter. When set, valkeyAsyncConnectWithOptions
+     * attaches the adapter automatically. */
+    int (*attach_fn)(struct valkeyAsyncContext *ac, void *attach_data);
+    void *attach_data;
 } valkeyOptions;
 
 /**

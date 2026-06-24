@@ -444,6 +444,10 @@ int valkeyContextConnectTcp(valkeyContext *c, const valkeyOptions *options) {
         c->tcp.source_addr = vk_strdup(source_addr);
     }
 
+    /* Deferred: endpoint stored, valkeyAsyncInitiateConnect will perform connect. */
+    if (c->flags & VALKEY_CONNECT_PENDING)
+        return VALKEY_OK;
+
     /* DNS lookup */
     /* TODO: Decide if DNS + TCP connect should share a single connect_timeout
      * budget rather than each getting the full timeout independently. */

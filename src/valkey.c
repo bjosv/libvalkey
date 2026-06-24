@@ -894,6 +894,9 @@ valkeyContext *valkeyConnectWithOptions(const valkeyOptions *options) {
         return c;
     }
 
+    if (options->options & VALKEY_OPT_DEFER_CONNECT)
+        c->flags |= VALKEY_CONNECT_PENDING;
+
     c->funcs->connect(c, options);
     if (c->err == 0 && c->fd != VALKEY_INVALID_FD &&
         options->command_timeout != NULL && (c->flags & VALKEY_BLOCK)) {
