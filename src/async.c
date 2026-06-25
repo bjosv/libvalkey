@@ -55,6 +55,11 @@
 #include <ctype.h>
 #include <errno.h>
 
+#ifdef VALKEY_USE_CARES
+int valkeyResolveAsyncStart(struct valkeyAsyncContext *ac, const char *host, int port);
+void valkeyResolveAsyncFree(struct valkeyAsyncContext *ac);
+#endif
+
 #ifdef NDEBUG
 #undef assert
 #define assert(e) (void)(e)
@@ -152,6 +157,8 @@ static valkeyAsyncContext *valkeyAsyncInitialize(valkeyContext *c) {
     ac->sub.schannels = schannels;
     ac->sub.pending_unsubs = 0;
 
+    ac->dns_state = NULL;
+
     return ac;
 oom:
     dictRelease(channels);
@@ -162,7 +169,7 @@ oom:
 
 /* We want the error field to be accessible directly instead of requiring
  * an indirection to the valkeyContext struct. */
-static void valkeyAsyncCopyError(valkeyAsyncContext *ac) {
+void valkeyAsyncCopyError(valkeyAsyncContext *ac) {
     if (!ac)
         return;
 
@@ -185,8 +192,7 @@ valkeyAsyncContext *valkeyAsyncConnectWithOptions(const valkeyOptions *options) 
 
     myOptions.options |= VALKEY_OPT_NONBLOCK;
 
-    /* If an adapter is provided, defer connect so it can be initiated
-     * after context setup is complete. */
+    /* Defer connect when adapter is provided for TCP. */
     if (myOptions.attach_fn && myOptions.type == VALKEY_CONN_TCP)
         myOptions.options |= VALKEY_OPT_DEFER_CONNECT;
 
@@ -207,22 +213,42 @@ valkeyAsyncContext *valkeyAsyncConnectWithOptions(const valkeyOptions *options) 
 
     /* Attach adapter and initiate connect if adapter was provided. */
     if (myOptions.attach_fn) {
-        /* Connect first (blocking DNS), then attach. This works with all
-         * adapters since the fd is valid by the time attach runs. */
-        if (valkeyAsyncInitiateConnect(ac) != VALKEY_OK) {
-            valkeyAsyncCopyError(ac);
-            return ac;
+        if (c->flags & VALKEY_CONNECT_PENDING) {
+#ifdef VALKEY_USE_CARES
+            if (myOptions.async_dns) {
+                /* Row 4: attach first (fd=-1), async DNS via c-ares. */
+                if (myOptions.attach_fn(ac, myOptions.attach_data) != VALKEY_OK) {
+                    valkeyAsyncCopyError(ac);
+                    return ac;
+                }
+                if (valkeyResolveAsyncStart(ac, c->tcp.host, c->tcp.port) != VALKEY_OK) {
+                    valkeyAsyncCopyError(ac);
+                    return ac;
+                }
+            } else
+#endif
+            {
+                /* Rows 2/3: blocking DNS, connect, then attach. */
+                if (valkeyAsyncInitiateConnect(ac) != VALKEY_OK) {
+                    valkeyAsyncCopyError(ac);
+                    return ac;
+                }
+                c->flags &= ~VALKEY_CONNECTED;
+                if (myOptions.attach_fn(ac, myOptions.attach_data) != VALKEY_OK) {
+                    valkeyAsyncCopyError(ac);
+                    return ac;
+                }
+                _EL_ADD_WRITE(ac);
+            }
+        } else {
+            /* Rows 5/6: not deferred (Unix), fd valid. Just attach. */
+            if (myOptions.attach_fn(ac, myOptions.attach_data) != VALKEY_OK) {
+                valkeyAsyncCopyError(ac);
+                return ac;
+            }
+            c->flags &= ~VALKEY_CONNECTED;
+            _EL_ADD_WRITE(ac);
         }
-        /* Clear VALKEY_CONNECTED so the event loop goes through
-         * valkeyAsyncHandleConnect (sets TCP_NODELAY, fires callback). */
-        c->flags &= ~VALKEY_CONNECTED;
-
-        if (myOptions.attach_fn(ac, myOptions.attach_data) != VALKEY_OK) {
-            valkeyAsyncCopyError(ac);
-            return ac;
-        }
-        /* Register fd with event loop for connect completion. */
-        _EL_ADD_WRITE(ac);
     } else {
         /* Legacy path: no adapter provided, connect happened in valkeyConnectWithOptions. */
         valkeyAsyncCopyError(ac);
@@ -269,13 +295,11 @@ static int valkeyAsyncInitiateConnect(valkeyAsyncContext *ac) {
     /* Clear the flag so the connect function proceeds fully this time. */
     c->flags &= ~VALKEY_CONNECT_PENDING;
 
-    /* Re-build options from stored context state. */
+    /* Currently only TCP connections are deferred. */
+    assert(c->connection_type == VALKEY_CONN_TCP);
     valkeyOptions options = {0};
     options.type = c->connection_type;
     options.connect_timeout = c->connect_timeout;
-
-    /* Currently only TCP connections are deferred. */
-    assert(c->connection_type == VALKEY_CONN_TCP);
     options.endpoint.tcp.ip = c->tcp.host;
     options.endpoint.tcp.port = c->tcp.port;
     options.endpoint.tcp.source_addr = c->tcp.source_addr;
@@ -433,6 +457,11 @@ static void valkeyAsyncFreeInternal(valkeyAsyncContext *ac) {
 
         dictRelease(ac->sub.schannels);
     }
+
+#ifdef VALKEY_USE_CARES
+    /* Free in-flight async DNS before tearing down the event loop. */
+    valkeyResolveAsyncFree(ac);
+#endif
 
     /* Signal event lib to clean up */
     _EL_CLEANUP(ac);
@@ -718,7 +747,7 @@ void valkeyProcessCallbacks(valkeyAsyncContext *ac) {
         valkeyAsyncDisconnectInternal(ac);
 }
 
-static void valkeyAsyncHandleConnectFailure(valkeyAsyncContext *ac) {
+void valkeyAsyncHandleConnectFailure(valkeyAsyncContext *ac) {
     valkeyRunConnectCallback(ac, VALKEY_ERR);
     valkeyAsyncDisconnectInternal(ac);
 }

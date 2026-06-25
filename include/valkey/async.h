@@ -94,6 +94,11 @@ typedef struct valkeyAsyncContext {
         void (*delWrite)(void *privdata);
         void (*cleanup)(void *privdata);
         void (*scheduleTimer)(void *privdata, struct timeval tv);
+        /* c-ares async DNS hooks. Set by adapters that support non-blocking
+         * DNS. If addCaresSocket is NULL, blocking DNS fallback is used. */
+        void (*addCaresSocket)(void *privdata, int fd, int readable, int writable);
+        void (*delCaresSocket)(void *privdata, int fd);
+        void (*scheduleCaresTimer)(void *privdata, struct timeval tv);
     } ev;
 
     /* Called when either the connection is terminated due to an error or per
@@ -121,6 +126,9 @@ typedef struct valkeyAsyncContext {
 
     /* Any configured RESP3 PUSH handler */
     valkeyAsyncPushFn *push_cb;
+
+    /* Async DNS resolution state. */
+    void *dns_state;
 } valkeyAsyncContext;
 
 LIBVALKEY_API valkeyAsyncContext *valkeyAsyncConnectWithOptions(const valkeyOptions *options);
@@ -143,6 +151,12 @@ LIBVALKEY_API void valkeyAsyncHandleWrite(valkeyAsyncContext *ac);
 LIBVALKEY_API void valkeyAsyncHandleTimeout(valkeyAsyncContext *ac);
 LIBVALKEY_API void valkeyAsyncRead(valkeyAsyncContext *ac);
 LIBVALKEY_API void valkeyAsyncWrite(valkeyAsyncContext *ac);
+
+#ifdef VALKEY_USE_CARES
+/* Async DNS (c-ares). Called by adapters that implement c-ares hooks. */
+LIBVALKEY_API void valkeyResolveAsyncHandleEvent(valkeyAsyncContext *ac, int fd, int readable, int writable);
+LIBVALKEY_API void valkeyResolveAsyncHandleTimer(valkeyAsyncContext *ac);
+#endif
 
 /* Command functions for an async context. Write the command to the
  * output buffer and register the provided callback. */

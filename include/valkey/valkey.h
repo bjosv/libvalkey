@@ -235,6 +235,7 @@ typedef struct {
      * attaches the adapter automatically. */
     int (*attach_fn)(struct valkeyAsyncContext *ac, void *attach_data);
     void *attach_data;
+    int async_dns; /* Adapter supports non-blocking DNS (handles fd=-1 at attach). */
 } valkeyOptions;
 
 /**

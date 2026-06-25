@@ -39,6 +39,13 @@
 #define VALKEY_LIBEVENT_DELETED 0x01
 #define VALKEY_LIBEVENT_ENTERED 0x02
 
+#define VALKEY_LIBEVENT_MAX_CARES_FDS 16
+
+typedef struct valkeyLibeventCaresEvent {
+    int fd;
+    struct event *ev;
+} valkeyLibeventCaresEvent;
+
 typedef struct valkeyLibeventEvents {
     valkeyAsyncContext *context;
     struct event *ev;
@@ -46,6 +53,9 @@ typedef struct valkeyLibeventEvents {
     struct timeval tv;
     short flags;
     short state;
+    valkeyLibeventCaresEvent cares_fds[VALKEY_LIBEVENT_MAX_CARES_FDS];
+    int cares_nfds;
+    struct event *cares_timer;
 } valkeyLibeventEvents;
 
 static void valkeyLibeventDestroy(valkeyLibeventEvents *e) {
@@ -100,7 +110,11 @@ static void valkeyLibeventUpdate(void *privdata, short flag, int isRemove) {
         }
     }
 
-    event_del(e->ev);
+    if (e->ev) {
+        event_del(e->ev);
+    } else {
+        e->ev = event_new(e->base, e->context->c.fd, 0, valkeyLibeventHandler, privdata);
+    }
     event_assign(e->ev, e->base, e->context->c.fd, e->flags | EV_PERSIST,
                  valkeyLibeventHandler, privdata);
     event_add(e->ev, tv);
@@ -127,9 +141,20 @@ static void valkeyLibeventCleanup(void *privdata) {
     if (!e) {
         return;
     }
-    event_del(e->ev);
-    event_free(e->ev);
-    e->ev = NULL;
+    if (e->ev) {
+        event_del(e->ev);
+        event_free(e->ev);
+        e->ev = NULL;
+    }
+    for (int i = 0; i < e->cares_nfds; i++) {
+        if (e->cares_fds[i].ev)
+            event_free(e->cares_fds[i].ev);
+    }
+    e->cares_nfds = 0;
+    if (e->cares_timer) {
+        event_free(e->cares_timer);
+        e->cares_timer = NULL;
+    }
 
     if (e->state & VALKEY_LIBEVENT_ENTERED) {
         e->state |= VALKEY_LIBEVENT_DELETED;
@@ -145,6 +170,75 @@ static void valkeyLibeventSetTimeout(void *privdata, struct timeval tv) {
     e->tv = tv;
     valkeyLibeventUpdate(e, flags, 0);
 }
+
+#ifdef VALKEY_USE_CARES
+static void valkeyLibeventCaresHandler(evutil_socket_t fd, short event, void *arg) {
+    valkeyLibeventEvents *e = (valkeyLibeventEvents *)arg;
+    int readable = (event & EV_READ) != 0;
+    int writable = (event & EV_WRITE) != 0;
+    valkeyResolveAsyncHandleEvent(e->context, (int)fd, readable, writable);
+}
+
+static void valkeyLibeventCaresTimerHandler(evutil_socket_t fd, short event, void *arg) {
+    (void)fd;
+    (void)event;
+    valkeyLibeventEvents *e = (valkeyLibeventEvents *)arg;
+    valkeyResolveAsyncHandleTimer(e->context);
+}
+
+static void valkeyLibeventAddCaresSocket(void *privdata, int fd, int readable, int writable) {
+    valkeyLibeventEvents *e = (valkeyLibeventEvents *)privdata;
+    int i;
+
+    for (i = 0; i < e->cares_nfds; i++) {
+        if (e->cares_fds[i].fd == fd)
+            break;
+    }
+    if (i == e->cares_nfds) {
+        if (e->cares_nfds >= VALKEY_LIBEVENT_MAX_CARES_FDS)
+            return;
+        e->cares_fds[i].fd = fd;
+        e->cares_fds[i].ev = NULL;
+        e->cares_nfds++;
+    }
+
+    short flags = EV_PERSIST;
+    if (readable)
+        flags |= EV_READ;
+    if (writable)
+        flags |= EV_WRITE;
+
+    if (e->cares_fds[i].ev)
+        event_free(e->cares_fds[i].ev);
+    e->cares_fds[i].ev = event_new(e->base, fd, flags, valkeyLibeventCaresHandler, e);
+    event_add(e->cares_fds[i].ev, NULL);
+}
+
+static void valkeyLibeventDelCaresSocket(void *privdata, int fd) {
+    valkeyLibeventEvents *e = (valkeyLibeventEvents *)privdata;
+
+    for (int i = 0; i < e->cares_nfds; i++) {
+        if (e->cares_fds[i].fd == fd) {
+            if (e->cares_fds[i].ev) {
+                event_free(e->cares_fds[i].ev);
+                e->cares_fds[i].ev = NULL;
+            }
+            e->cares_fds[i] = e->cares_fds[e->cares_nfds - 1];
+            e->cares_nfds--;
+            break;
+        }
+    }
+}
+
+static void valkeyLibeventScheduleCaresTimer(void *privdata, struct timeval tv) {
+    valkeyLibeventEvents *e = (valkeyLibeventEvents *)privdata;
+
+    if (e->cares_timer == NULL)
+        e->cares_timer = evtimer_new(e->base, valkeyLibeventCaresTimerHandler, e);
+    evtimer_del(e->cares_timer);
+    evtimer_add(e->cares_timer, &tv);
+}
+#endif /* VALKEY_USE_CARES */
 
 static int valkeyLibeventAttach(valkeyAsyncContext *ac, struct event_base *base) {
     valkeyContext *c = &(ac->c);
@@ -168,17 +262,39 @@ static int valkeyLibeventAttach(valkeyAsyncContext *ac, struct event_base *base)
     ac->ev.delWrite = valkeyLibeventDelWrite;
     ac->ev.cleanup = valkeyLibeventCleanup;
     ac->ev.scheduleTimer = valkeyLibeventSetTimeout;
+#ifdef VALKEY_USE_CARES
+    ac->ev.addCaresSocket = valkeyLibeventAddCaresSocket;
+    ac->ev.delCaresSocket = valkeyLibeventDelCaresSocket;
+    ac->ev.scheduleCaresTimer = valkeyLibeventScheduleCaresTimer;
+#endif
     ac->ev.data = e;
 
-    /* Initialize and install read/write events */
-    e->ev = event_new(base, c->fd, EV_READ | EV_WRITE, valkeyLibeventHandler, e);
+    /* Initialize and install read/write events (skip if fd not yet available). */
     e->base = base;
+    if (c->fd != VALKEY_INVALID_FD) {
+        e->ev = event_new(base, c->fd, EV_READ | EV_WRITE, valkeyLibeventHandler, e);
+    }
     return VALKEY_OK;
 }
 
 /* Internal adapter function with correct function signature. */
 static int valkeyLibeventAttachAdapter(valkeyAsyncContext *ac, void *base) {
     return valkeyLibeventAttach(ac, (struct event_base *)base);
+}
+
+VALKEY_UNUSED
+static int valkeyOptionsUseLibevent(valkeyOptions *options,
+                                    struct event_base *base) {
+    if (options == NULL || base == NULL) {
+        return VALKEY_ERR;
+    }
+
+    options->attach_fn = valkeyLibeventAttachAdapter;
+    options->attach_data = base;
+#ifdef VALKEY_USE_CARES
+    options->async_dns = 1;
+#endif
+    return VALKEY_OK;
 }
 
 VALKEY_UNUSED

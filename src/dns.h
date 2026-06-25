@@ -46,6 +46,20 @@ int valkeyResolveSync(const char *host, int port, int flags,
  * freeaddrinfo-compatible or c-ares-allocated results. */
 #ifdef VALKEY_USE_CARES
 void valkeyFreeAddrInfo(struct addrinfo *ai);
+
+struct valkeyAsyncContext;
+
+/* Start async DNS resolution. Returns VALKEY_OK if query was started. */
+int valkeyResolveAsyncStart(struct valkeyAsyncContext *ac, const char *host, int port);
+
+/* Called by adapter when a c-ares fd has activity. */
+void valkeyResolveAsyncHandleEvent(struct valkeyAsyncContext *ac, int fd, int readable, int writable);
+
+/* Called by adapter when c-ares timer fires. */
+void valkeyResolveAsyncHandleTimer(struct valkeyAsyncContext *ac);
+
+/* Free async DNS state. Safe to call when dns_state is NULL. */
+void valkeyResolveAsyncFree(struct valkeyAsyncContext *ac);
 #else
 #define valkeyFreeAddrInfo(ai) freeaddrinfo(ai)
 #endif

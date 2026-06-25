@@ -62,6 +62,17 @@ static void valkeyCaresLibraryInit(void) {
     ares_library_init(ARES_LIB_INIT_NONE);
 }
 
+/* Determine address family from context flags and hostname. */
+static int caresHintsFamily(const char *host, int flags) {
+    if ((flags & VALKEY_PREFER_IPV6) && (flags & VALKEY_PREFER_IPV4))
+        return AF_UNSPEC;
+    if (flags & VALKEY_PREFER_IPV6)
+        return AF_INET6;
+    if (strchr(host, ':') != NULL)
+        return AF_INET6;
+    return AF_INET;
+}
+
 static long valkeyDnsPollMillis(void) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
@@ -257,15 +268,7 @@ static int valkeyResolveCares(const char *host, int port, int flags,
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_STREAM;
-
-    if ((flags & VALKEY_PREFER_IPV6) && (flags & VALKEY_PREFER_IPV4))
-        hints.ai_family = AF_UNSPEC;
-    else if (flags & VALKEY_PREFER_IPV6)
-        hints.ai_family = AF_INET6;
-    else if (strchr(host, ':') != NULL)
-        hints.ai_family = AF_INET6; /* IPv6 literal */
-    else
-        hints.ai_family = AF_INET;
+    hints.ai_family = caresHintsFamily(host, flags);
 
     char portstr[6];
     snprintf(portstr, sizeof(portstr), "%d", port);
@@ -317,6 +320,198 @@ static int valkeyResolveCares(const char *host, int port, int flags,
     ares_destroy(channel);
     return rv;
 }
+
+/* --- Async DNS resolution --- */
+
+#include "async.h"
+#include "async_private.h"
+#include "net.h"
+#include "valkey_private.h"
+
+typedef struct valkeyAsyncDns {
+    ares_channel_t *channel;
+    struct valkeyAsyncContext *ac;
+    char *host;
+    int port;
+    int ai_family;
+} valkeyAsyncDns;
+
+static void caresAsyncSockStateCb(void *data, ares_socket_t fd, int readable, int writable) {
+    valkeyAsyncDns *dns = (valkeyAsyncDns *)data;
+    valkeyAsyncContext *ac = dns->ac;
+    if (!readable && !writable)
+        ac->ev.delCaresSocket(ac->ev.data, (int)fd);
+    else
+        ac->ev.addCaresSocket(ac->ev.data, (int)fd, readable, writable);
+}
+
+static void caresAsyncScheduleTimer(valkeyAsyncDns *dns) {
+    valkeyAsyncContext *ac = dns->ac;
+    struct timeval tv, maxtv;
+    maxtv.tv_sec = 1;
+    maxtv.tv_usec = 0;
+    struct timeval *tvp = ares_timeout(dns->channel, &maxtv, &tv);
+    ac->ev.scheduleCaresTimer(ac->ev.data, *tvp);
+}
+
+static void caresAsyncCallback(void *arg, int status, int timeouts, struct ares_addrinfo *res);
+
+static void caresAsyncComplete(valkeyAsyncDns *dns, struct addrinfo *servinfo) {
+    valkeyAsyncContext *ac = dns->ac;
+    valkeyContext *c = &ac->c;
+
+    if (valkeyTcpConnectNonBlock(c, servinfo) != VALKEY_OK) {
+        valkeyFreeAddrInfo(servinfo);
+        valkeyAsyncCopyError(ac);
+        valkeyResolveAsyncFree(ac);
+        valkeyAsyncHandleConnectFailure(ac);
+        return;
+    }
+    valkeyFreeAddrInfo(servinfo);
+
+    c->flags &= ~VALKEY_CONNECT_PENDING;
+    valkeyResolveAsyncFree(ac);
+    _EL_ADD_WRITE(ac);
+}
+
+static void caresAsyncCallback(void *arg, int status, int timeouts, struct ares_addrinfo *res) {
+    (void)timeouts;
+    valkeyAsyncDns *dns = (valkeyAsyncDns *)arg;
+    valkeyAsyncContext *ac = dns->ac;
+    valkeyContext *c = &ac->c;
+
+    if (status == ARES_EDESTRUCTION) {
+        if (res)
+            ares_freeaddrinfo(res);
+        return;
+    }
+
+    if (status == ARES_SUCCESS && res) {
+        struct addrinfo *servinfo = NULL;
+        if (caresAddrInfoToAddrInfo(res, &servinfo) != 0) {
+            ares_freeaddrinfo(res);
+            valkeySetError(c, VALKEY_ERR_OOM, "Out of memory");
+            valkeyAsyncCopyError(ac);
+            valkeyResolveAsyncFree(ac);
+            valkeyAsyncHandleConnectFailure(ac);
+            return;
+        }
+        ares_freeaddrinfo(res);
+        caresAsyncComplete(dns, servinfo);
+        return;
+    }
+
+    /* Retry with other family if applicable. */
+    if ((status == ARES_ENOTFOUND || status == ARES_ENODATA) &&
+        dns->ai_family != AF_UNSPEC) {
+        if (res)
+            ares_freeaddrinfo(res);
+        dns->ai_family = (dns->ai_family == AF_INET) ? AF_INET6 : AF_INET;
+        struct ares_addrinfo_hints hints = {0};
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_family = dns->ai_family;
+        char portstr[6];
+        snprintf(portstr, sizeof(portstr), "%d", dns->port);
+        ares_getaddrinfo(dns->channel, dns->host, portstr, &hints, caresAsyncCallback, dns);
+        caresAsyncScheduleTimer(dns);
+        return;
+    }
+
+    /* DNS failed. */
+    if (res)
+        ares_freeaddrinfo(res);
+    int eai = caresStatusToEai(status);
+    if (eai == EAI_MEMORY)
+        valkeySetError(c, VALKEY_ERR_OOM, "Out of memory");
+    else
+        valkeySetError(c, VALKEY_ERR_OTHER, gai_strerror(eai));
+    valkeyAsyncCopyError(ac);
+    valkeyResolveAsyncFree(ac);
+    valkeyAsyncHandleConnectFailure(ac);
+}
+
+int valkeyResolveAsyncStart(struct valkeyAsyncContext *ac, const char *host, int port) {
+    valkeyContext *c = &ac->c;
+
+    pthread_once(&cares_init_once, valkeyCaresLibraryInit);
+
+    valkeyAsyncDns *dns = vk_calloc(1, sizeof(*dns));
+    if (dns == NULL)
+        return VALKEY_ERR;
+
+    dns->ac = ac;
+    dns->host = vk_strdup(host);
+    if (dns->host == NULL) {
+        vk_free(dns);
+        return VALKEY_ERR;
+    }
+    dns->port = port;
+    dns->ai_family = caresHintsFamily(host, c->flags);
+
+    struct ares_options opts = {0};
+    opts.sock_state_cb = caresAsyncSockStateCb;
+    opts.sock_state_cb_data = dns;
+    int optmask = ARES_OPT_SOCK_STATE_CB;
+
+    int rv = ares_init_options(&dns->channel, &opts, optmask);
+    if (rv != ARES_SUCCESS) {
+        vk_free(dns->host);
+        vk_free(dns);
+        return VALKEY_ERR;
+    }
+
+    ac->dns_state = dns;
+
+    struct ares_addrinfo_hints hints = {0};
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_family = dns->ai_family;
+
+    char portstr[6];
+    snprintf(portstr, sizeof(portstr), "%d", port);
+    ares_getaddrinfo(dns->channel, host, portstr, &hints, caresAsyncCallback, dns);
+
+    /* IP literals resolve synchronously — callback already fired. */
+    if (ac->dns_state == NULL)
+        return ac->c.err ? VALKEY_ERR : VALKEY_OK;
+
+    caresAsyncScheduleTimer(dns);
+    return VALKEY_OK;
+}
+
+void valkeyResolveAsyncHandleEvent(struct valkeyAsyncContext *ac, int fd, int readable, int writable) {
+    valkeyAsyncDns *dns = (valkeyAsyncDns *)ac->dns_state;
+    if (dns == NULL || dns->channel == NULL)
+        return;
+    ares_socket_t rfd = readable ? (ares_socket_t)fd : ARES_SOCKET_BAD;
+    ares_socket_t wfd = writable ? (ares_socket_t)fd : ARES_SOCKET_BAD;
+    ares_process_fd(dns->channel, rfd, wfd);
+    /* Callback may have freed dns_state (on completion/failure). */
+    if (ac->dns_state != NULL)
+        caresAsyncScheduleTimer((valkeyAsyncDns *)ac->dns_state);
+}
+
+void valkeyResolveAsyncHandleTimer(struct valkeyAsyncContext *ac) {
+    valkeyAsyncDns *dns = (valkeyAsyncDns *)ac->dns_state;
+    if (dns == NULL || dns->channel == NULL)
+        return;
+    ares_process_fd(dns->channel, ARES_SOCKET_BAD, ARES_SOCKET_BAD);
+    if (ac->dns_state != NULL)
+        caresAsyncScheduleTimer((valkeyAsyncDns *)ac->dns_state);
+}
+
+void valkeyResolveAsyncFree(struct valkeyAsyncContext *ac) {
+    valkeyAsyncDns *dns = (valkeyAsyncDns *)ac->dns_state;
+    if (dns == NULL)
+        return;
+    if (dns->channel) {
+        ares_destroy(dns->channel);
+        dns->channel = NULL;
+    }
+    vk_free(dns->host);
+    vk_free(dns);
+    ac->dns_state = NULL;
+}
+
 #endif /* VALKEY_USE_CARES */
 
 int valkeyResolveSync(const char *host, int port, int flags,

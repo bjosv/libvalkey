@@ -2001,6 +2001,33 @@ static void test_async_connect_with_attach_in_options_dns_fail(void) {
     event_base_free(b);
 }
 
+#ifdef VALKEY_USE_CARES
+static void test_async_connect_async_dns(struct config config) {
+    test("Async connect with non-blocking DNS (c-ares): ");
+    base = event_base_new();
+    struct event *timeout = evtimer_new(base, timeout_cb, NULL);
+    struct timeval timeout_tv = {.tv_sec = 3};
+    evtimer_add(timeout, &timeout_tv);
+
+    valkeyOptions options = {0};
+    VALKEY_OPTIONS_SET_TCP(&options, "localhost", config.tcp.port);
+    valkeyOptionsUseLibevent(&options, base);
+    valkeyAsyncContext *ac = valkeyAsyncConnectWithOptions(&options);
+    assert(ac != NULL && ac->err == 0);
+    /* DNS is async — fd not assigned yet. */
+    assert(ac->c.fd == VALKEY_INVALID_FD);
+
+    int count = 0;
+    valkeyAsyncCommand(ac, async_ping_cb, &count, "PING");
+    valkeyAsyncCommand(ac, async_ping_cb, &count, "PING");
+    event_base_dispatch(base);
+
+    event_free(timeout);
+    event_base_free(base);
+    test_cond(count == 2);
+}
+#endif
+
 static void test_async_connect_unix(struct config config) {
     test("Async Unix connect: ");
     base = event_base_new();
@@ -2982,6 +3009,9 @@ int main(int argc, char **argv) {
     test_async_command_parsing(cfg);
     test_async_connect_with_attach_in_options(cfg);
     test_async_connect_with_attach_in_options_dns_fail();
+#ifdef VALKEY_USE_CARES
+    test_async_connect_async_dns(cfg);
+#endif
     test_pubsub_handling(cfg);
     test_pubsub_multiple_channels(cfg);
     test_monitor(cfg);
