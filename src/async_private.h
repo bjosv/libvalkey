@@ -62,23 +62,8 @@
         ctx->ev.cleanup = NULL;                \
     } while (0)
 
-static inline void refreshTimeout(valkeyAsyncContext *ctx) {
-#define VALKEY_TIMER_ISSET(tvp) \
-    (tvp && ((tvp)->tv_sec || (tvp)->tv_usec))
-
-#define VALKEY_EL_TIMER(ac, tvp)                             \
-    if ((ac)->ev.scheduleTimer && VALKEY_TIMER_ISSET(tvp)) { \
-        (ac)->ev.scheduleTimer((ac)->ev.data, *(tvp));       \
-    }
-
-    if (ctx->c.flags & VALKEY_CONNECTED) {
-        VALKEY_EL_TIMER(ctx, ctx->c.command_timeout);
-    } else {
-        VALKEY_EL_TIMER(ctx, ctx->c.connect_timeout);
-    }
-}
-
 /* Visible although private since required by libvalkey_tls.so */
+LIBVALKEY_API void refreshTimeout(valkeyAsyncContext *ac);
 LIBVALKEY_API void valkeyAsyncDisconnectInternal(valkeyAsyncContext *ac);
 LIBVALKEY_API void valkeyProcessCallbacks(valkeyAsyncContext *ac);
 

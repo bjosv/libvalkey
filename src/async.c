@@ -46,6 +46,7 @@
 #include "async_private.h"
 #include "dict.h"
 #include "net.h"
+#include "timer.h"
 #include "valkey_private.h"
 #include "vkutil.h"
 
@@ -151,6 +152,9 @@ static valkeyAsyncContext *valkeyAsyncInitialize(valkeyContext *c) {
     ac->sub.patterns = patterns;
     ac->sub.schannels = schannels;
     ac->sub.pending_unsubs = 0;
+
+    ac->timer_list = NULL;
+    ac->timeout_timer = NULL;
 
     return ac;
 oom:
@@ -373,6 +377,13 @@ static void valkeyAsyncFreeInternal(valkeyAsyncContext *ac) {
             valkeyRunCallback(ac, dictGetVal(de), NULL);
 
         dictRelease(ac->sub.schannels);
+    }
+
+    /* Free internal timers. */
+    if (ac->timer_list) {
+        valkeyTimerListFree(ac->timer_list);
+        vk_free(ac->timer_list);
+        ac->timer_list = NULL;
     }
 
     /* Signal event lib to clean up */
@@ -771,11 +782,38 @@ void valkeyAsyncHandleWrite(valkeyAsyncContext *ac) {
     c->funcs->async_write(ac);
 }
 
-void valkeyAsyncHandleTimeout(valkeyAsyncContext *ac) {
+/* Add a timer and notify the adapter if rescheduling is needed. */
+valkeyTimer *valkeyAsyncAddTimer(valkeyAsyncContext *ac, struct timeval delay,
+                                 int repeat, valkeyTimerProc proc, void *privdata) {
+    if (ac->timer_list == NULL) {
+        ac->timer_list = vk_calloc(1, sizeof(valkeyTimerList));
+        if (ac->timer_list == NULL)
+            return NULL;
+        valkeyTimerListInit(ac->timer_list);
+    }
+    valkeyTimerList *list = ac->timer_list;
+    valkeyTimer *old_head = list->head;
+    valkeyTimer *t = valkeyTimerAdd(list, delay, repeat, proc, privdata);
+    if (t == NULL)
+        return NULL;
+
+    /* New timer has the earliest deadline, tell the adapter to wake sooner. */
+    if (list->head != old_head && ac->ev.scheduleTimer)
+        ac->ev.scheduleTimer(ac->ev.data, delay);
+
+    return t;
+}
+
+#define VALKEY_TIMER_ISSET(tvp) \
+    (tvp && ((tvp)->tv_sec || (tvp)->tv_usec))
+
+/* Timer callback for connect/command timeout. */
+void valkeyAsyncTimeoutHandler(void *privdata) {
+    valkeyAsyncContext *ac = (valkeyAsyncContext *)privdata;
     valkeyContext *c = &(ac->c);
     valkeyCallback cb;
-    /* must not be called from a callback */
-    assert(!(c->flags & VALKEY_IN_CALLBACK));
+
+    ac->timeout_timer = NULL; /* one-shot, already removed from list */
 
     if ((c->flags & VALKEY_CONNECTED)) {
         if (ac->replies.head == NULL && ac->sub.replies.head == NULL) {
@@ -783,8 +821,7 @@ void valkeyAsyncHandleTimeout(valkeyAsyncContext *ac) {
             return;
         }
 
-        if (!ac->c.command_timeout ||
-            (!ac->c.command_timeout->tv_sec && !ac->c.command_timeout->tv_usec)) {
+        if (!VALKEY_TIMER_ISSET(ac->c.command_timeout)) {
             /* A belated connect timeout arriving, ignore */
             return;
         }
@@ -803,11 +840,37 @@ void valkeyAsyncHandleTimeout(valkeyAsyncContext *ac) {
         valkeyRunCallback(ac, &cb, NULL);
     }
 
-    /**
-     * TODO: Don't automatically sever the connection,
-     * rather, allow to ignore <x> responses before the queue is clear
-     */
     valkeyAsyncDisconnectInternal(ac);
+}
+
+void refreshTimeout(valkeyAsyncContext *ac) {
+    struct timeval *tvp;
+    if (ac->c.flags & VALKEY_CONNECTED)
+        tvp = ac->c.command_timeout;
+    else
+        tvp = ac->c.connect_timeout;
+
+    if (!VALKEY_TIMER_ISSET(tvp))
+        return;
+
+    /* Only schedule if not already active. */
+    if (ac->timeout_timer == NULL)
+        ac->timeout_timer = valkeyAsyncAddTimer(ac, *tvp, VALKEY_TIMER_ONESHOT,
+                                                valkeyAsyncTimeoutHandler, ac);
+}
+
+void valkeyAsyncHandleTimeout(valkeyAsyncContext *ac) {
+    valkeyContext *c = &(ac->c);
+    struct timeval remaining;
+    /* must not be called from a callback */
+    assert(!(c->flags & VALKEY_IN_CALLBACK));
+
+    /* Process internal timers. */
+    if (ac->timer_list == NULL)
+        return;
+    struct timeval *tv = valkeyProcessTimers(ac->timer_list, &remaining);
+    if (tv && ac->ev.scheduleTimer)
+        ac->ev.scheduleTimer(ac->ev.data, *tv);
 }
 
 static inline int vk_isdigit_ascii(char c) {

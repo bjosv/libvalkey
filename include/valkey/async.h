@@ -121,6 +121,10 @@ typedef struct valkeyAsyncContext {
 
     /* Any configured RESP3 PUSH handler */
     valkeyAsyncPushFn *push_cb;
+
+    /* Internal timer state, managed by timer.c */
+    struct valkeyTimerList *timer_list;
+    struct valkeyTimer *timeout_timer;
 } valkeyAsyncContext;
 
 LIBVALKEY_API valkeyAsyncContext *valkeyAsyncConnectWithOptions(const valkeyOptions *options);
